@@ -31,6 +31,10 @@ import {
   resetSeoToDefault, 
   sanitizeMarkdownContent 
 } from '../utils/articleSecurityAndSeo';
+import { 
+  fetchArticlesFromSupabase, 
+  isSupabaseConfigured 
+} from '../lib/supabaseClient';
 
 export const INITIAL_BLOG_ARTICLES = [
   {
@@ -324,6 +328,20 @@ export default function BlogPage({ onReturnToSite, onOpenConsultation }) {
   const [activeCategory, setActiveCategory] = useState('Semua');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Fetch articles from Supabase cloud database if configured
+  useEffect(() => {
+    if (isSupabaseConfigured()) {
+      fetchArticlesFromSupabase().then(cloudArticles => {
+        if (cloudArticles && cloudArticles.length > 0) {
+          setArticles(cloudArticles);
+          try {
+            localStorage.setItem('ldp_blog_articles', JSON.stringify(cloudArticles));
+          } catch (e) {}
+        }
+      });
+    }
+  }, []);
 
   // Sync with storage events and updates from Admin Dashboard
   useEffect(() => {

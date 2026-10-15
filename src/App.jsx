@@ -44,6 +44,7 @@ import {
   MceLogoSVG, 
   MmaLogoSVG 
 } from './components/MWGroupLogos';
+import { submitConsultationLead } from './lib/supabaseClient';
 
 export default function App() {
   // Admin Mode State
@@ -223,6 +224,14 @@ export default function App() {
       console.log(err);
     }
     
+    // Submit lead to Supabase (or localStorage fallback)
+    submitConsultationLead({
+      name: formData.name,
+      email: formData.email,
+      service_type: formData.projectType,
+      message: formData.message
+    });
+
     setToastMessage("Permintaan konsultasi Anda telah berhasil dikirim! Tim konsultan LDP akan menghubungi Anda dalam 1x24 jam.");
     setActiveModal(null);
     setFormData({ name: '', email: '', projectType: 'Gedung Komersial', message: '' });
