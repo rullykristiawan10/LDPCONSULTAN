@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" fill="none">
+  <!-- Orange Top Chevron / Dynamic Arrow (P/LDP symbol) -->
+  <path d="M 74 12 L 168 64 L 168 126 L 125 151 L 125 76 L 74 46 Z" fill="#F37021" />
+  
+  <!-- Blue Bottom Upward Arrow (L/1/LDP symbol) -->
+  <path d="M 71 82 L 114 107 L 114 198 L 71 173 L 71 122 L 36 101 Z" fill="#007ACC" />
+</svg>

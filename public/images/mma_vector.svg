@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 216 55" fill="none">
+  <!-- Peak 1 (Left Blue Shape) -->
+  <polygon points="21,2 31,2 41,18.5 30,18.5 20,35 2,35" fill="#0580C0" />
+  
+  <!-- Peak 2 (Right Blue Shape) -->
+  <polygon points="52,2 62,2 72,18.5 61,18.5 51,35 33,35" fill="#0580C0" />
+  
+  <!-- Red Triangle -->
+  <polygon points="72,18.5 63,35 82,35" fill="#DA2139" />
+  
+  <!-- MMA Text -->
+  <text x="87" y="34.5" font-family="'Outfit', 'Montserrat', 'Inter', sans-serif" font-weight="900" font-size="41" fill="#2B333E" letter-spacing="-0.5">MMA</text>
+  
+  <!-- MULKI MITRA AIRCON Text -->
+  <text x="2" y="52" font-family="'Plus Jakarta Sans', 'Inter', sans-serif" font-weight="600" font-size="12" fill="#2B333E" textLength="212" lengthAdjust="spacing">MULKI MITRA AIRCON</text>
+</svg>
