@@ -676,6 +676,11 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
     }
   };
 
+  const handleFinishTeamChanges = () => {
+    saveTeamMembersToStorage(teamMembers);
+    alert('✅ Selesai! Seluruh data Jajaran Direksi & Pakar telah berhasil disimpan dan langsung aktif di website utama.');
+  };
+
   // Blog Articles Management State
   const [articles, setArticles] = useState(getStoredArticles);
   const [articleSearch, setArticleSearch] = useState('');
@@ -2443,6 +2448,28 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                   <Plus size={16} />
                   <span>Tambah Direksi / Pakar</span>
                 </button>
+                <button 
+                  onClick={handleFinishTeamChanges} 
+                  style={{
+                    background: 'linear-gradient(135deg, #10B981, #059669)',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    padding: '9px 20px',
+                    borderRadius: '8px',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '7px',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                    transition: 'all 0.2s ease'
+                  }}
+                  title="Klik Selesai ketika selesai mengubah data direksi & tim untuk memastikan data tersimpan & aktif di website"
+                >
+                  <CheckCircle2 size={16} />
+                  <span>Selesai</span>
+                </button>
               </div>
             </div>
 
@@ -2497,6 +2524,45 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
               ))}
             </div>
 
+            {/* Selesai / Konfirmasi Bar */}
+            <div style={{ 
+              marginTop: '20px', 
+              padding: '14px 18px', 
+              background: 'rgba(16, 185, 129, 0.08)', 
+              border: '1px solid rgba(16, 185, 129, 0.25)', 
+              borderRadius: '12px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#10B981', fontSize: '0.85rem', fontWeight: 500 }}>
+                <CheckCircle2 size={18} />
+                <span>Sudah selesai mengubah susunan direksi & dewan pakar? Klik tombol untuk konfirmasi dan sinkronisasi ke website.</span>
+              </div>
+              <button 
+                onClick={handleFinishTeamChanges}
+                style={{
+                  background: 'linear-gradient(135deg, #10B981, #059669)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  padding: '8px 20px',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 10px rgba(16, 185, 129, 0.35)',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <CheckCircle2 size={16} />
+                <span>Selesai</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -4734,8 +4800,8 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                   className="admin-btn-primary"
                   style={{ minWidth: '160px', justifyContent: 'center' }}
                 >
-                  <Check size={16} />
-                  <span>{editingTeamMemberId ? 'Simpan Perubahan' : 'Tambahkan Direksi'}</span>
+                  <CheckCircle2 size={16} />
+                  <span>{editingTeamMemberId ? 'Selesai & Simpan Perubahan' : 'Selesai & Tambahkan Direksi'}</span>
                 </button>
               </div>
             </form>
