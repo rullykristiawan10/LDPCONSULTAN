@@ -53,14 +53,17 @@ export default function WhatsAppWidget() {
   useEffect(() => {
     loadContacts();
 
-    // Fetch from Supabase if connected
+    // Fetch from Supabase if connected and local is empty
     if (isSupabaseConfigured()) {
       fetchWhatsAppContactsFromSupabase().then(cloudContacts => {
         if (cloudContacts && cloudContacts.length > 0) {
-          setContacts(cloudContacts);
-          try {
-            localStorage.setItem('ldp_whatsapp_contacts', JSON.stringify(cloudContacts));
-          } catch (e) {}
+          const hasLocal = localStorage.getItem('ldp_whatsapp_contacts');
+          if (!hasLocal) {
+            setContacts(cloudContacts);
+            try {
+              localStorage.setItem('ldp_whatsapp_contacts', JSON.stringify(cloudContacts));
+            } catch (e) {}
+          }
         }
       });
     }

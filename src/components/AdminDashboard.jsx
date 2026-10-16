@@ -117,20 +117,59 @@ const ARTICLE_CATEGORIES = [
   'Plumbing & Fire Safety'
 ];
 
-// Helper to convert uploaded image to Base64
+// Helper to convert and compress uploaded image to lightweight Base64 (~20-40KB)
 const handleImageFileUpload = (e, callback) => {
   const file = e.target.files && e.target.files[0];
-  if (file) {
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Ukuran file foto terlalu besar (maksimal 5MB)");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      callback(reader.result);
-    };
-    reader.readAsDataURL(file);
+  if (!file) return;
+
+  if (file.size > 15 * 1024 * 1024) {
+    alert("Ukuran file foto terlalu besar (maksimal 15MB)");
+    e.target.value = '';
+    return;
   }
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const maxDim = 400; // 400x400 is ideal for crisp avatars with tiny storage footprint
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Compress to JPEG with 0.82 quality -> resulting in ~20-35 KB
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        callback(compressedDataUrl);
+      } catch (err) {
+        callback(event.target.result);
+      }
+      e.target.value = '';
+    };
+    img.onerror = () => {
+      alert("Format gambar tidak didukung atau file rusak.");
+      e.target.value = '';
+    };
+    img.src = event.target.result;
+  };
+  reader.readAsDataURL(file);
 };
 
 // Default WhatsApp Contacts
@@ -431,21 +470,22 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
       if (isSupabaseConfigured()) {
         syncWhatsAppContactsToSupabase(updatedList);
       }
+      setWaToast('Pengaturan WhatsApp berhasil diperbarui & tersinkronisasi ke web utama!');
     } catch (e) {
       console.error("Error saving WhatsApp contacts to storage:", e);
+      alert('Peringatan: Gagal menyimpan data (memori penyimpanan browser penuh). Mohon gunakan foto dengan resolusi lebih kecil.');
     }
-    setWaToast('Pengaturan WhatsApp berhasil diperbarui & tersinkronisasi ke web utama!');
     setTimeout(() => setWaToast(''), 4000);
   };
 
   const handleToggleWaStatus = (id) => {
-    const updated = waContacts.map(c => c.id === id ? { ...c, active: c.active === false ? true : false } : c);
+    const updated = waContacts.map(c => String(c.id) === String(id) ? { ...c, active: c.active === false ? true : false } : c);
     saveWaContactsToStorage(updated);
   };
 
   const handleDeleteWaContact = (id) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus kontak WhatsApp ini?')) {
-      const updated = waContacts.filter(c => c.id !== id);
+      const updated = waContacts.filter(c => String(c.id) !== String(id));
       saveWaContactsToStorage(updated);
     }
   };
@@ -458,9 +498,13 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
 
   const handleSaveWaEdit = (e) => {
     e.preventDefault();
-    if (!editingWaContact.name || !editingWaContact.phone) return;
-    const cleanPhone = editingWaContact.phone.replace(/[^0-9]/g, '');
-    const updated = waContacts.map(c => c.id === editingWaContact.id ? { ...editingWaContact, phone: cleanPhone } : c);
+    if (!editingWaContact || !editingWaContact.name || !editingWaContact.phone) return;
+    const cleanPhone = String(editingWaContact.phone).replace(/[^0-9]/g, '');
+    const updated = waContacts.map(c => 
+      String(c.id) === String(editingWaContact.id) 
+        ? { ...c, ...editingWaContact, phone: cleanPhone } 
+        : c
+    );
     saveWaContactsToStorage(updated);
     setEditingWaContact(null);
   };

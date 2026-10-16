@@ -138,37 +138,52 @@ export default function App() {
       setSiteSettings(updatedSettings ? { ...DEFAULT_SITE_SETTINGS, ...updatedSettings } : getStoredSiteSettings());
     });
 
-    // 3. Cloud fetch from Supabase if configured
+    // 3. Cloud fetch from Supabase if configured (only populates if local is empty)
     if (isSupabaseConfigured()) {
       fetchTeamMembersFromSupabase().then((data) => {
         if (data && data.length > 0) {
-          setTeamMembers(data);
-          localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(data));
+          const hasLocal = localStorage.getItem(STORAGE_KEYS.TEAM);
+          if (!hasLocal) {
+            setTeamMembers(data);
+            localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(data));
+          }
         }
       });
       fetchWhatsAppContactsFromSupabase().then((data) => {
         if (data && data.length > 0) {
-          localStorage.setItem(STORAGE_KEYS.WA, JSON.stringify(data));
-          loadWaPhone(data);
+          const hasLocal = localStorage.getItem(STORAGE_KEYS.WA);
+          if (!hasLocal) {
+            localStorage.setItem(STORAGE_KEYS.WA, JSON.stringify(data));
+            loadWaPhone(data);
+          }
         }
       });
       fetchProjectsFromSupabase().then((data) => {
         if (data && data.length > 0) {
-          setProjectsList(data);
-          localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(data));
+          const hasLocal = localStorage.getItem(STORAGE_KEYS.PROJECTS);
+          if (!hasLocal) {
+            setProjectsList(data);
+            localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(data));
+          }
         }
       });
       fetchSiteSettingsFromSupabase().then((data) => {
         if (data) {
-          const merged = { ...DEFAULT_SITE_SETTINGS, ...data };
-          setSiteSettings(merged);
-          localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(merged));
+          const hasLocal = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+          if (!hasLocal) {
+            const merged = { ...DEFAULT_SITE_SETTINGS, ...data };
+            setSiteSettings(merged);
+            localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(merged));
+          }
         }
       });
       fetchArticlesFromSupabase().then((data) => {
         if (data && data.length > 0) {
-          setBlogArticles(data);
-          localStorage.setItem(STORAGE_KEYS.BLOG, JSON.stringify(data));
+          const hasLocal = localStorage.getItem(STORAGE_KEYS.BLOG);
+          if (!hasLocal) {
+            setBlogArticles(data);
+            localStorage.setItem(STORAGE_KEYS.BLOG, JSON.stringify(data));
+          }
         }
       });
     }
