@@ -3093,45 +3093,125 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 {/* Current Avatar Preview & Upload Action */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', margin: '8px 0 12px' }}>
                   <div style={{ position: 'relative' }}>
-                    <img 
-                      src={editingWaContact.image || "/images/avatar_ade.jpg"} 
-                      alt="Preview" 
-                      style={{ 
-                        width: '60px', 
-                        height: '60px', 
-                        borderRadius: '50%', 
-                        objectFit: 'cover', 
+                    {editingWaContact.image ? (
+                      <img 
+                        src={editingWaContact.image} 
+                        alt="Preview" 
+                        style={{ 
+                          width: '60px', 
+                          height: '60px', 
+                          borderRadius: '50%', 
+                          objectFit: 'cover', 
+                          border: '3px solid #25D366',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+                        }}
+                        onError={(e) => { e.target.src = "/images/avatar_habib.jpg"; }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: '60px',
+                        height: '60px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #FF6600, #EA580C)',
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 700,
+                        fontSize: '1.2rem',
                         border: '3px solid #25D366',
                         boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
-                      }}
-                      onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
-                    />
+                      }}>
+                        {editingWaContact.name ? editingWaContact.name.substring(0, 2).toUpperCase() : 'WA'}
+                      </div>
+                    )}
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
-                    <label 
-                      className="admin-btn-primary" 
-                      style={{ 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        gap: '6px', 
-                        cursor: 'pointer',
-                        padding: '8px 14px',
-                        fontSize: '0.8rem',
-                        width: 'fit-content'
-                      }}
-                    >
-                      <Upload size={14} />
-                      <span>Upload Foto dari Komputer</span>
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        style={{ display: 'none' }}
-                        onChange={(e) => handleImageFileUpload(e, (base64) => setEditingWaContact({ ...editingWaContact, image: base64 }))}
-                      />
-                    </label>
-                    <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>File foto (JPG/PNG, Maks 5MB) atau pilih galeri di bawah:</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <label 
+                        className="admin-btn-primary" 
+                        style={{ 
+                          display: 'inline-flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          gap: '6px', 
+                          cursor: 'pointer',
+                          padding: '7px 14px',
+                          fontSize: '0.8rem',
+                          width: 'fit-content'
+                        }}
+                      >
+                        <Upload size={14} />
+                        <span>Upload Foto dari Komputer</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          style={{ display: 'none' }}
+                          onChange={(e) => handleImageFileUpload(e, (base64) => setEditingWaContact({ ...editingWaContact, image: base64 }))}
+                        />
+                      </label>
+
+                      {editingWaContact.image && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingWaContact({ ...editingWaContact, image: '' })}
+                          className="admin-act-btn del"
+                          style={{ 
+                            padding: '6px 12px', 
+                            fontSize: '0.78rem', 
+                            width: 'auto', 
+                            borderRadius: '8px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                          title="Hapus foto ini (gunakan inisial)"
+                        >
+                          <Trash2 size={13} />
+                          <span>Hapus Foto</span>
+                        </button>
+                      )}
+
+                      {/* Tombol Kembalikan Foto Asli */}
+                      {String(editingWaContact.id) === '1' && editingWaContact.image !== '/images/avatar_habib.jpg' && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingWaContact({ ...editingWaContact, image: '/images/avatar_habib.jpg' })}
+                          className="admin-btn-secondary"
+                          style={{ padding: '6px 12px', fontSize: '0.78rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          title="Kembalikan ke foto asli Abdul Wahid (jas hitam)"
+                        >
+                          <RotateCcw size={13} />
+                          <span>Foto Asli Abdul Wahid</span>
+                        </button>
+                      )}
+                      {String(editingWaContact.id) === '2' && editingWaContact.image !== '/images/avatar_rizky.jpg' && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingWaContact({ ...editingWaContact, image: '/images/avatar_rizky.jpg' })}
+                          className="admin-btn-secondary"
+                          style={{ padding: '6px 12px', fontSize: '0.78rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          title="Kembalikan ke foto asli Tito Riyanto"
+                        >
+                          <RotateCcw size={13} />
+                          <span>Foto Asli Tito</span>
+                        </button>
+                      )}
+                      {String(editingWaContact.id) === '3' && editingWaContact.image !== '/images/avatar_ade.jpg' && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingWaContact({ ...editingWaContact, image: '/images/avatar_ade.jpg' })}
+                          className="admin-btn-secondary"
+                          style={{ padding: '6px 12px', fontSize: '0.78rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          title="Kembalikan ke foto asli Ade Maulana"
+                        >
+                          <RotateCcw size={13} />
+                          <span>Foto Asli Ade</span>
+                        </button>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>File foto (JPG/PNG, Maks 15MB) atau pilih galeri di bawah:</span>
                   </div>
                 </div>
 
@@ -4373,28 +4453,90 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                     )}
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
-                    <label 
-                      className="admin-btn-primary" 
-                      style={{ 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
-                        gap: '6px', 
-                        cursor: 'pointer',
-                        padding: '6px 14px',
-                        fontSize: '0.78rem',
-                        width: 'fit-content'
-                      }}
-                    >
-                      <Upload size={14} />
-                      <span>Upload Foto dari Komputer</span>
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        style={{ display: 'none' }}
-                        onChange={(e) => handleImageFileUpload(e, (base64) => setTeamFormData({ ...teamFormData, image: base64 }))}
-                      />
-                    </label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <label 
+                        className="admin-btn-primary" 
+                        style={{ 
+                          display: 'inline-flex', 
+                          alignItems: 'center', 
+                          gap: '6px', 
+                          cursor: 'pointer',
+                          padding: '6px 14px',
+                          fontSize: '0.78rem',
+                          width: 'fit-content'
+                        }}
+                      >
+                        <Upload size={14} />
+                        <span>Upload Foto dari Komputer</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          style={{ display: 'none' }}
+                          onChange={(e) => handleImageFileUpload(e, (base64) => setTeamFormData({ ...teamFormData, image: base64 }))}
+                        />
+                      </label>
+
+                      {teamFormData.image && (
+                        <button
+                          type="button"
+                          onClick={() => setTeamFormData({ ...teamFormData, image: '' })}
+                          className="admin-act-btn del"
+                          style={{ 
+                            padding: '6px 12px', 
+                            fontSize: '0.78rem', 
+                            width: 'auto', 
+                            borderRadius: '8px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                          title="Hapus foto ini (gunakan inisial)"
+                        >
+                          <Trash2 size={13} />
+                          <span>Hapus Foto</span>
+                        </button>
+                      )}
+
+                      {String(editingTeamMemberId) === '1' && teamFormData.image !== '/images/avatar_rizky.jpg' && (
+                        <button
+                          type="button"
+                          onClick={() => setTeamFormData({ ...teamFormData, image: '/images/avatar_rizky.jpg' })}
+                          className="admin-btn-secondary"
+                          style={{ padding: '6px 12px', fontSize: '0.78rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          title="Kembalikan ke foto asli Tito Riyanto"
+                        >
+                          <RotateCcw size={13} />
+                          <span>Foto Asli Tito</span>
+                        </button>
+                      )}
+
+                      {String(editingTeamMemberId) === '2' && teamFormData.image !== '/images/avatar_habib.jpg' && (
+                        <button
+                          type="button"
+                          onClick={() => setTeamFormData({ ...teamFormData, image: '/images/avatar_habib.jpg' })}
+                          className="admin-btn-secondary"
+                          style={{ padding: '6px 12px', fontSize: '0.78rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          title="Kembalikan ke foto asli Abdul Wahid (jas hitam)"
+                        >
+                          <RotateCcw size={13} />
+                          <span>Foto Asli Abdul Wahid</span>
+                        </button>
+                      )}
+
+                      {String(editingTeamMemberId) === '3' && teamFormData.image !== '/images/avatar_ade.jpg' && (
+                        <button
+                          type="button"
+                          onClick={() => setTeamFormData({ ...teamFormData, image: '/images/avatar_ade.jpg' })}
+                          className="admin-btn-secondary"
+                          style={{ padding: '6px 12px', fontSize: '0.78rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          title="Kembalikan ke foto asli Ade Maulana"
+                        >
+                          <RotateCcw size={13} />
+                          <span>Foto Asli Ade</span>
+                        </button>
+                      )}
+                    </div>
                     <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>Atau ketik path / URL gambar di bawah:</span>
                   </div>
                 </div>

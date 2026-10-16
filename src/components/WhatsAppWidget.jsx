@@ -124,12 +124,35 @@ export default function WhatsAppWidget() {
                   onClick={() => handleContactClick(contact)}
                 >
                   <div className="wa-card-left">
-                    <img 
-                      src={contact.image || "/images/avatar_ade.jpg"} 
-                      alt={contact.name} 
-                      className="wa-contact-img" 
-                      onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
-                    />
+                    {contact.image ? (
+                      <img 
+                        src={contact.image} 
+                        alt={contact.name} 
+                        className="wa-contact-img" 
+                        onError={(e) => { 
+                          e.target.style.display = 'none';
+                          if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div 
+                      className="wa-contact-img-initials"
+                      style={{
+                        display: contact.image ? 'none' : 'flex',
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #FF6600, #EA580C)',
+                        color: '#fff',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 700,
+                        fontSize: '0.85rem',
+                        flexShrink: 0
+                      }}
+                    >
+                      {contact.name ? contact.name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() : 'WA'}
+                    </div>
                     <div className="wa-contact-info">
                       <h5 className="wa-contact-name">{contact.name}</h5>
                       <p className="wa-contact-role">{contact.role}</p>
