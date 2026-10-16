@@ -434,7 +434,7 @@ export default function App() {
       a: "Tergantung pada skala dan kompleksitas proyek. Untuk gedung perkantoran atau komersial menengah (5.000 - 15.000 m²), konsep awal dan perhitungan BoQ umumnya diselesaikan dalam waktu 10-14 hari kerja."
     },
     {
-      q: "Apakah PT Lintang Duta Perkasa terverifikasi secara hukum di Indonesia?",
+      q: "Apakah PT Lentang Duta Perkasa terverifikasi secara hukum di Indonesia?",
       a: "Ya. Kami terdaftar resmi di OSS Kementerian Investasi RI dengan NIB 0129116242975 dan memiliki sertifikasi manajemen mutu ISO 9001:2015 serta ISO 45001:2018 (K3). Seluruh insinyur kami memegang sertifikasi keahlian STRA / SKA LPJK Utama."
     },
     {
@@ -534,7 +534,7 @@ export default function App() {
           <a href="#" className="brand-logo" aria-label="Beranda LDP Technical Consultant">
             <img 
               src="/images/ldp_logo.png" 
-              alt="PT Lintang Duta Perkasa - LDP Technical Consultant" 
+              alt="PT Lentang Duta Perkasa - LDP Technical Consultant" 
               className="brand-logo-img" 
             />
           </a>
@@ -726,7 +726,7 @@ export default function App() {
               <h2>LDP Technical Consultant <br /><span className="text-blue-600">Part of MW Group</span></h2>
 
               <p>
-                <strong>PT Lintang Duta Perkasa (LDP Technical Consultant)</strong> adalah entitas konsultan teknik profesional yang berfokus pada perancangan sistem MEP (Mechanical, Electrical & Plumbing) serta HVAC Engineering modern. Kami mendampingi pemilik gedung, kontraktor EPC, dan pengembang industri dari tahap konsep awal hingga pengujian commissioning.
+                <strong>PT Lentang Duta Perkasa (LDP Technical Consultant)</strong> adalah entitas konsultan teknik profesional yang berfokus pada perancangan sistem MEP (Mechanical, Electrical & Plumbing) serta HVAC Engineering modern. Kami mendampingi pemilik gedung, kontraktor EPC, dan pengembang industri dari tahap konsep awal hingga pengujian commissioning.
               </p>
 
               <p>
@@ -1387,7 +1387,7 @@ export default function App() {
                 </a>
 
                 <a 
-                  href={`mailto:${siteSettings.email || 'consultant@ldpgroup.co.id'}?subject=Permintaan%20Konsultasi%20Teknik%20MEP%20HVAC%20-%20PT%20Lintang%20Duta%20Perkasa`}
+                  href={`mailto:${siteSettings.email || 'consultant@ldpgroup.co.id'}?subject=Permintaan%20Konsultasi%20Teknik%20MEP%20HVAC%20-%20PT%20Lentang%20Duta%20Perkasa`}
                   className="btn-email-outline"
                 >
                   <Mail className="w-4 h-4" />
@@ -1570,20 +1570,6 @@ export default function App() {
         </button>
       )}
 
-      <a 
-        href={`https://wa.me/${waPhone}?text=Halo%20LDP%20Technical%20Consultant,%20saya%20ingin%20konsultasi%20proyek`} 
-        target="_blank" 
-        rel="noopener noreferrer"
-        className="whatsapp-float-btn"
-        aria-label="Chat WhatsApp Konsultasi"
-        title="Chat WhatsApp Konsultasi"
-      >
-        <div className="whatsapp-pulse-ring"></div>
-        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white" style={{ width: '32px', height: '32px', maxWidth: '32px', maxHeight: '32px' }}>
-          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-0.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
-        </svg>
-      </a>
-
       {/* MODAL SYSTEM */}
 
       {/* 1. CONSULTATION MODAL */}
@@ -1658,7 +1644,7 @@ export default function App() {
               <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.82rem', color: '#64748B' }}>
                 <Mail className="w-4 h-4 text-sky-500" />
                 <span>Atau kirim dokumen via email:</span>
-                <a href={`mailto:${siteSettings.email || 'consultant@ldpgroup.co.id'}?subject=Permintaan%20Konsultasi%20Teknik%20MEP%20HVAC%20-%20PT%20Lintang%20Duta%20Perkasa`} className="text-sky-600 font-bold hover:underline">
+                <a href={`mailto:${siteSettings.email || 'consultant@ldpgroup.co.id'}?subject=Permintaan%20Konsultasi%20Teknik%20MEP%20HVAC%20-%20PT%20Lentang%20Duta%20Perkasa`} className="text-sky-600 font-bold hover:underline">
                   {siteSettings.email || 'consultant@ldpgroup.co.id'}
                 </a>
               </div>
@@ -1739,7 +1725,7 @@ export default function App() {
                 <ShieldCheck className="w-8 h-8" />
               </div>
               <h3 className="text-xl font-extrabold text-slate-900">Dokumen Legalitas & Verifikasi NIB</h3>
-              <p className="text-xs text-slate-500 mt-1">PT Lintang Duta Perkasa - LDP Technical Consultant</p>
+              <p className="text-xs text-slate-500 mt-1">PT Lentang Duta Perkasa - LDP Technical Consultant</p>
             </div>
 
             <div className="border border-slate-200 rounded-xl p-5 bg-slate-50 mb-6 space-y-3 text-xs">

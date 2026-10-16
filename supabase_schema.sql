@@ -1,5 +1,5 @@
 -- =====================================================================
--- PT LINTANG DUTA PERKASA (LDP Technical Consultant - MW Group)
+-- PT LENTANG DUTA PERKASA (LDP Technical Consultant - MW Group)
 -- Supabase Database Schema
 -- =====================================================================
 
