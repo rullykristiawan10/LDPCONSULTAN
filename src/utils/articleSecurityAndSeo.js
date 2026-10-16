@@ -6,8 +6,8 @@
 
 // Default site metadata for restoring on page unmount
 export const DEFAULT_SITE_METADATA = {
-  title: "PT LINTANG DUTA PERKASA - LDP Technical Consultant (Part of MW Group)",
-  description: "PT Lintang Duta Perkasa (LDP Technical Consultant) adalah konsultan teknik profesional terpercaya untuk perencanaan, audit, dan supervisi sistem MEP & HVAC Engineering di Indonesia.",
+  title: "LDP Technical Consultant - PT Lintang Duta Perkasa",
+  description: "LDP Technical Consultant (PT Lintang Duta Perkasa) adalah konsultan teknik profesional terpercaya untuk perencanaan, audit, dan supervisi sistem MEP & HVAC Engineering di Indonesia.",
   keywords: "LDP Technical Consultant, PT Lintang Duta Perkasa, MEP Engineering, HVAC System, MW Group, Konsultan Teknik, Audit HVAC, Feasibility Study, BoQ",
   siteUrl: "https://ldpconsultan.co.id",
   logoUrl: "/images/logo.svg"

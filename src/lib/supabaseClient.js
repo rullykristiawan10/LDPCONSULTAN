@@ -241,3 +241,286 @@ export const submitConsultationLead = async (leadData) => {
     return { success: true, mode: 'fallback' };
   }
 };
+
+/* =========================================================================
+   TEAM & LEADERSHIP DIRECTORS SERVICES
+   ========================================================================= */
+
+export const fetchTeamMembersFromSupabase = async () => {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client
+      .from('team_members')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (error) {
+      if (error.code === '42P01') return null; // table doesn't exist yet
+      throw error;
+    }
+    if (!data || data.length === 0) return null;
+
+    return data.map(item => ({
+      id: item.id,
+      name: item.name,
+      badge: item.badge || '',
+      role: item.role,
+      initials: item.initials || '',
+      image: item.image || item.avatar || '',
+      bio: item.bio || item.experience || ''
+    }));
+  } catch (err) {
+    console.warn('Fallback to local team (Supabase fetch error):', err.message);
+    return null;
+  }
+};
+
+export const syncTeamMembersToSupabase = async (members) => {
+  const client = getSupabaseClient();
+  if (!client || !Array.isArray(members)) return { success: false, message: 'Supabase belum terkonfigurasi' };
+
+  try {
+    // Delete and reinsert or upsert all members
+    const payload = members.map(m => ({
+      id: typeof m.id === 'number' && m.id < 100000 ? m.id : undefined,
+      name: m.name,
+      badge: m.badge || '',
+      role: m.role || '',
+      initials: m.initials || '',
+      image: m.image || '',
+      bio: m.bio || '',
+      is_active: true,
+      updated_at: new Date().toISOString()
+    })).map(item => {
+      if (!item.id) delete item.id;
+      return item;
+    });
+
+    // Try upsert
+    const { error: upsertErr } = await client
+      .from('team_members')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (upsertErr) {
+      // If schema differs or ID mismatch, fallback to delete all & insert
+      await client.from('team_members').delete().neq('id', 0);
+      const { error: insertErr } = await client.from('team_members').insert(payload);
+      if (insertErr) throw insertErr;
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Supabase team sync error:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+/* =========================================================================
+   WHATSAPP CONTACTS SERVICES
+   ========================================================================= */
+
+export const fetchWhatsAppContactsFromSupabase = async () => {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client
+      .from('whatsapp_contacts')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (error) {
+      if (error.code === '42P01') return null;
+      throw error;
+    }
+    if (!data || data.length === 0) return null;
+
+    return data.map(item => ({
+      id: item.id,
+      name: item.name,
+      role: item.role,
+      phone: item.phone,
+      image: item.image,
+      active: item.active !== false
+    }));
+  } catch (err) {
+    console.warn('Fallback to local WA contacts (Supabase fetch error):', err.message);
+    return null;
+  }
+};
+
+export const syncWhatsAppContactsToSupabase = async (contacts) => {
+  const client = getSupabaseClient();
+  if (!client || !Array.isArray(contacts)) return { success: false, message: 'Supabase belum terkonfigurasi' };
+
+  try {
+    const payload = contacts.map(c => ({
+      id: typeof c.id === 'number' && c.id < 100000 ? c.id : undefined,
+      name: c.name,
+      role: c.role,
+      phone: c.phone,
+      image: c.image || '',
+      active: c.active !== false,
+      updated_at: new Date().toISOString()
+    })).map(item => {
+      if (!item.id) delete item.id;
+      return item;
+    });
+
+    const { error: upsertErr } = await client
+      .from('whatsapp_contacts')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (upsertErr) {
+      await client.from('whatsapp_contacts').delete().neq('id', 0);
+      const { error: insertErr } = await client.from('whatsapp_contacts').insert(payload);
+      if (insertErr) throw insertErr;
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Supabase WA sync error:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+/* =========================================================================
+   PROJECTS (PORTOFOLIO) SERVICES
+   ========================================================================= */
+
+export const fetchProjectsFromSupabase = async () => {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client
+      .from('projects')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (error) {
+      if (error.code === '42P01') return null;
+      throw error;
+    }
+    if (!data || data.length === 0) return null;
+
+    return data.map(p => ({
+      id: p.id,
+      title: p.title,
+      category: p.category,
+      badge: p.badge,
+      tag: p.tag,
+      image: p.image,
+      description: p.description,
+      role: p.role,
+      location: p.location,
+      client: p.client,
+      year: p.year,
+      progress: p.progress || 100,
+      budget: p.budget || '',
+      status: p.status || '',
+      scope: Array.isArray(p.scope) ? p.scope : (typeof p.scope === 'string' ? JSON.parse(p.scope) : [])
+    }));
+  } catch (err) {
+    console.warn('Fallback to local projects (Supabase fetch error):', err.message);
+    return null;
+  }
+};
+
+export const syncProjectsToSupabase = async (projects) => {
+  const client = getSupabaseClient();
+  if (!client || !Array.isArray(projects)) return { success: false, message: 'Supabase belum terkonfigurasi' };
+
+  try {
+    const payload = projects.map(p => ({
+      id: typeof p.id === 'number' && p.id < 100000 ? p.id : undefined,
+      title: p.title,
+      category: p.category,
+      badge: p.badge || '',
+      tag: p.tag || '',
+      image: p.image || '',
+      description: p.description || '',
+      role: p.role || '',
+      location: p.location || '',
+      client: p.client || '',
+      year: p.year || '',
+      progress: p.progress || 100,
+      budget: p.budget || '',
+      status: p.status || '',
+      scope: p.scope || [],
+      updated_at: new Date().toISOString()
+    })).map(item => {
+      if (!item.id) delete item.id;
+      return item;
+    });
+
+    const { error: upsertErr } = await client
+      .from('projects')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (upsertErr) {
+      await client.from('projects').delete().neq('id', 0);
+      const { error: insertErr } = await client.from('projects').insert(payload);
+      if (insertErr) throw insertErr;
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Supabase projects sync error:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+/* =========================================================================
+   SITE SETTINGS (LEGALITAS & PROFILE) SERVICES
+   ========================================================================= */
+
+export const fetchSiteSettingsFromSupabase = async () => {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client
+      .from('site_settings')
+      .select('*')
+      .eq('key', 'main_config')
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === '42P01') return null;
+      throw error;
+    }
+    if (!data || !data.value) return null;
+
+    return typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+  } catch (err) {
+    console.warn('Fallback to local settings (Supabase fetch error):', err.message);
+    return null;
+  }
+};
+
+export const syncSiteSettingsToSupabase = async (settings) => {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, message: 'Supabase belum terkonfigurasi' };
+
+  try {
+    const payload = {
+      key: 'main_config',
+      value: settings,
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await client
+      .from('site_settings')
+      .upsert(payload, { onConflict: 'key' });
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    console.error('Supabase site settings sync error:', err);
+    return { success: false, error: err.message };
+  }
+};
+

@@ -35,6 +35,7 @@ import {
   fetchArticlesFromSupabase, 
   isSupabaseConfigured 
 } from '../lib/supabaseClient';
+import { subscribeToSync, SYNC_EVENTS } from '../utils/syncManager';
 
 export const INITIAL_BLOG_ARTICLES = [
   {
@@ -343,17 +344,17 @@ export default function BlogPage({ onReturnToSite, onOpenConsultation }) {
     }
   }, []);
 
-  // Sync with storage events and updates from Admin Dashboard
+  // Sync with realtime cross-tab events and updates from Admin Dashboard
   useEffect(() => {
-    const handleUpdate = () => {
-      setArticles(getStoredArticles());
+    const handleUpdate = (updatedArticles) => {
+      if (Array.isArray(updatedArticles) && updatedArticles.length > 0) {
+        setArticles(updatedArticles);
+      } else {
+        setArticles(getStoredArticles());
+      }
     };
-    window.addEventListener('blog-articles-updated', handleUpdate);
-    window.addEventListener('storage', handleUpdate);
-    return () => {
-      window.removeEventListener('blog-articles-updated', handleUpdate);
-      window.removeEventListener('storage', handleUpdate);
-    };
+    const unsubscribe = subscribeToSync(SYNC_EVENTS.BLOG, handleUpdate);
+    return unsubscribe;
   }, []);
 
   // Synchronize dynamic SEO, OpenGraph tags & Schema.org JSON-LD
@@ -716,7 +717,7 @@ export default function BlogPage({ onReturnToSite, onOpenConsultation }) {
                   <ArrowRight className="w-4 h-4" />
                 </a>
                 <a 
-                  href={`mailto:consultant@ldggroup.co.id?subject=${encodeURIComponent(`Diskusi Teknis: ${selectedArticle.title}`)}`}
+                  href={`mailto:consultant@ldpgroup.co.id?subject=${encodeURIComponent(`Diskusi Teknis: ${selectedArticle.title}`)}`}
                   className="blog-cta-btn-wa"
                   style={{ background: 'rgba(56, 189, 248, 0.1)', borderColor: 'rgba(56, 189, 248, 0.3)', color: '#38BDF8' }}
                 >

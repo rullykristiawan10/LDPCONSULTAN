@@ -32,7 +32,12 @@ import {
   ArrowUp,
   BookOpen
 } from 'lucide-react';
-import AdminDashboard, { getStoredTeamMembers } from './components/AdminDashboard';
+import AdminDashboard, { 
+  getStoredTeamMembers, 
+  getStoredProjects, 
+  getStoredSiteSettings,
+  DEFAULT_SITE_SETTINGS 
+} from './components/AdminDashboard';
 import BlogPage, { INITIAL_BLOG_ARTICLES, getStoredArticles } from './components/BlogPage';
 import WhatsAppWidget from './components/WhatsAppWidget';
 import { 
@@ -44,7 +49,21 @@ import {
   MceLogoSVG, 
   MmaLogoSVG 
 } from './components/MWGroupLogos';
-import { submitConsultationLead } from './lib/supabaseClient';
+import { 
+  submitConsultationLead,
+  fetchTeamMembersFromSupabase,
+  fetchWhatsAppContactsFromSupabase,
+  fetchProjectsFromSupabase,
+  fetchSiteSettingsFromSupabase,
+  fetchArticlesFromSupabase,
+  isSupabaseConfigured
+} from './lib/supabaseClient';
+import {
+  subscribeToSync,
+  broadcastSync,
+  STORAGE_KEYS,
+  SYNC_EVENTS
+} from './utils/syncManager';
 
 export default function App() {
   // Admin Mode State
@@ -64,16 +83,16 @@ export default function App() {
   // Dynamic WhatsApp Phone State
   const [waPhone, setWaPhone] = useState('6283874078144');
 
-  const loadWaPhone = () => {
+  const loadWaPhone = (incomingContacts) => {
     try {
-      const saved = localStorage.getItem('ldp_whatsapp_contacts');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const activeFirst = parsed.find(c => c.active !== false);
-          if (activeFirst && activeFirst.phone) {
-            setWaPhone(activeFirst.phone.replace(/[^0-9]/g, ''));
-          }
+      const list = incomingContacts || (() => {
+        const saved = localStorage.getItem(STORAGE_KEYS.WA);
+        return saved ? JSON.parse(saved) : null;
+      })();
+      if (Array.isArray(list) && list.length > 0) {
+        const activeFirst = list.find(c => c.active !== false);
+        if (activeFirst && activeFirst.phone) {
+          setWaPhone(activeFirst.phone.replace(/[^0-9]/g, ''));
         }
       }
     } catch (e) {
@@ -81,59 +100,96 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    loadWaPhone();
-    window.addEventListener('wa-contacts-updated', loadWaPhone);
-    window.addEventListener('storage', loadWaPhone);
-    window.addEventListener('focus', loadWaPhone);
-    return () => {
-      window.removeEventListener('wa-contacts-updated', loadWaPhone);
-      window.removeEventListener('storage', loadWaPhone);
-      window.removeEventListener('focus', loadWaPhone);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isAdminMode) {
-      loadWaPhone();
-    }
-  }, [isAdminMode]);
-
   // Synchronized Blog Articles State
   const [blogArticles, setBlogArticles] = useState(getStoredArticles);
-
-  useEffect(() => {
-    const handleSyncBlog = () => {
-      setBlogArticles(getStoredArticles());
-    };
-    window.addEventListener('blog-articles-updated', handleSyncBlog);
-    window.addEventListener('storage', handleSyncBlog);
-    return () => {
-      window.removeEventListener('blog-articles-updated', handleSyncBlog);
-      window.removeEventListener('storage', handleSyncBlog);
-    };
-  }, []);
 
   // Synchronized Team & Directors State
   const [teamMembers, setTeamMembers] = useState(getStoredTeamMembers);
 
+  // Synchronized Projects Portfolio State
+  const [projectsList, setProjectsList] = useState(getStoredProjects);
+
+  // Synchronized Site & Legality Settings State
+  const [siteSettings, setSiteSettings] = useState(getStoredSiteSettings);
+
+  // Real-Time Cross-Tab & Supabase Synchronization
   useEffect(() => {
-    const handleSyncTeam = () => {
-      setTeamMembers(getStoredTeamMembers());
-    };
-    window.addEventListener('ldp-team-updated', handleSyncTeam);
-    window.addEventListener('storage', handleSyncTeam);
-    window.addEventListener('focus', handleSyncTeam);
+    // 1. Initial WhatsApp phone load
+    loadWaPhone();
+
+    // 2. Subscribe to syncManager events (BroadcastChannel + CustomEvents + Storage)
+    const unsubWa = subscribeToSync(SYNC_EVENTS.WA, (updatedWa) => {
+      loadWaPhone(updatedWa);
+    });
+
+    const unsubTeam = subscribeToSync(SYNC_EVENTS.TEAM, (updatedTeam) => {
+      setTeamMembers(updatedTeam && updatedTeam.length > 0 ? updatedTeam : getStoredTeamMembers());
+    });
+
+    const unsubBlog = subscribeToSync(SYNC_EVENTS.BLOG, (updatedArticles) => {
+      setBlogArticles(updatedArticles && updatedArticles.length > 0 ? updatedArticles : getStoredArticles());
+    });
+
+    const unsubProjects = subscribeToSync(SYNC_EVENTS.PROJECTS, (updatedProjects) => {
+      setProjectsList(updatedProjects && updatedProjects.length > 0 ? updatedProjects : getStoredProjects());
+    });
+
+    const unsubSettings = subscribeToSync(SYNC_EVENTS.SETTINGS, (updatedSettings) => {
+      setSiteSettings(updatedSettings ? { ...DEFAULT_SITE_SETTINGS, ...updatedSettings } : getStoredSiteSettings());
+    });
+
+    // 3. Cloud fetch from Supabase if configured
+    if (isSupabaseConfigured()) {
+      fetchTeamMembersFromSupabase().then((data) => {
+        if (data && data.length > 0) {
+          setTeamMembers(data);
+          localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(data));
+        }
+      });
+      fetchWhatsAppContactsFromSupabase().then((data) => {
+        if (data && data.length > 0) {
+          localStorage.setItem(STORAGE_KEYS.WA, JSON.stringify(data));
+          loadWaPhone(data);
+        }
+      });
+      fetchProjectsFromSupabase().then((data) => {
+        if (data && data.length > 0) {
+          setProjectsList(data);
+          localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(data));
+        }
+      });
+      fetchSiteSettingsFromSupabase().then((data) => {
+        if (data) {
+          const merged = { ...DEFAULT_SITE_SETTINGS, ...data };
+          setSiteSettings(merged);
+          localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(merged));
+        }
+      });
+      fetchArticlesFromSupabase().then((data) => {
+        if (data && data.length > 0) {
+          setBlogArticles(data);
+          localStorage.setItem(STORAGE_KEYS.BLOG, JSON.stringify(data));
+        }
+      });
+    }
+
     return () => {
-      window.removeEventListener('ldp-team-updated', handleSyncTeam);
-      window.removeEventListener('storage', handleSyncTeam);
-      window.removeEventListener('focus', handleSyncTeam);
+      unsubWa();
+      unsubTeam();
+      unsubBlog();
+      unsubProjects();
+      unsubSettings();
     };
   }, []);
 
+  // When returning from Admin mode, refresh all states from local storage immediately
   useEffect(() => {
     if (!isAdminMode) {
+      loadWaPhone();
       setTeamMembers(getStoredTeamMembers());
+      setBlogArticles(getStoredArticles());
+      setProjectsList(getStoredProjects());
+      setSiteSettings(getStoredSiteSettings());
     }
   }, [isAdminMode]);
 
@@ -188,6 +244,37 @@ export default function App() {
       window.removeEventListener('popstate', checkRoutes);
     };
   }, []);
+
+  // Auto-scroll to section on hash anchor (e.g., #direksi, #portofolio, #kontak)
+  useEffect(() => {
+    if (!isAdminMode && !isBlogMode && window.location.hash) {
+      const hash = window.location.hash;
+      if (hash && hash !== '#' && hash !== '#admin' && !hash.startsWith('#blog')) {
+        const timer = setTimeout(() => {
+          try {
+            const el = document.querySelector(hash);
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth' });
+            }
+          } catch (e) {
+            // invalid selector
+          }
+        }, 150);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [isAdminMode, isBlogMode]);
+
+  // Set browser tab title dynamically
+  useEffect(() => {
+    if (isAdminMode) {
+      document.title = "Portal Admin | LDP Technical Consultant";
+    } else if (isBlogMode) {
+      document.title = "Blog & Publikasi Teknik | LDP Technical Consultant";
+    } else {
+      document.title = "LDP Technical Consultant";
+    }
+  }, [isAdminMode, isBlogMode]);
 
   const handleReturnToSite = () => {
     setIsAdminMode(false);
@@ -246,89 +333,10 @@ export default function App() {
     setActiveModal('project');
   };
 
-  // Portfolio Data
-  const projects = [
-    {
-      id: 1,
-      title: "Muara Laboh Geothermal Power Plant",
-      category: "industrial",
-      badge: "MEP & HVAC CONSULTANT",
-      tag: "POWER PLANT",
-      image: "/images/geothermal_plant.jpg",
-      description: "Perencanaan dan supervisi instalasi sistem HVAC pengkondisian udara area control room & electrical room serta sistem pemadam hidran bertekanan tinggi untuk pembangkit listrik tenaga panas bumi.",
-      role: "Procurement & Construction Manager",
-      location: "Muara Laboh, Sumatera Barat",
-      client: "PT Supreme Energy Muara Laboh",
-      year: "2024 - 2025",
-      scope: [
-        "Desain sistem HVAC Control Room & Electrical Substation",
-        "Perhitungan Heat Load & Ventilasi Industri Bertekanan Positive",
-        "Sistem Proteksi Kebakaran FM200 & Hydrant Loop",
-        "Supervisi & Testing Commissioning Tahap Akhir"
-      ]
-    },
-    {
-      id: 2,
-      title: "Portim Accommodation Complex Freeport",
-      category: "commercial",
-      badge: "AIRPORT INFRASTRUCTURE",
-      tag: "COMMERCIAL COMPLEX",
-      image: "/images/airport_complex.jpg",
-      description: "Konsultasi desain sistem HVAC khusus untuk area Mess karyawan Freeport di Timika Papua dengan memperhatikan kelembaban tinggi dan efisiensi energi maksimum.",
-      role: "Technical Safety & Compliance Team",
-      location: "Timika, Papua",
-      client: "PT Freeport Indonesia",
-      year: "2023 - 2024",
-      scope: [
-        "Audit Termal Kelembaban Udara Tropis (Dehumidification System)",
-        "Desain Chiller Plant Sentral Redundan N+1",
-        "Integrasi Building Management System (BMS)",
-        "Studi Kelayakan Efisiensi Konsumsi Daya Listrik HVAC"
-      ]
-    },
-    {
-      id: 3,
-      title: "Wisma Barito Pacific MEP Overhaul",
-      category: "commercial",
-      badge: "HIGH-RISE TOWER",
-      tag: "COMMERCIAL BUILDING",
-      image: "/images/building_architecture.jpg",
-      description: "Modernisasi & perancangan ulang sistem distribusi kelistrikan, sistem tata udara VRV/VRF, serta audit keselamatan hidran proteksi kebakaran gedung perkantoran 28 lantai.",
-      role: "Lead Engineering Consultant",
-      location: "Jakarta Selatan",
-      client: "Barito Pacific Group",
-      year: "2023",
-      scope: [
-        "Redesain Distribusi Panel Listrik Utama LVMDP",
-        "Retrofit Chiller R22 ke VRF Inverter Ramah Lingkungan",
-        "Simulasi CFD Aliran Udara & Smoke Extraction Staircase",
-        "Penyusunan BoQ & Dokumentasi Tender EPC"
-      ]
-    },
-    {
-      id: 4,
-      title: "Data Center Precision HVAC Facility",
-      category: "industrial",
-      badge: "CRITICAL INFRASTRUCTURE",
-      tag: "DATA CENTER",
-      image: "/images/cad_workstation.jpg",
-      description: "Perencanaan sistem pendingin presisi (CRAC/CRAH) dengan toleransi suhu ketat ±0.5°C dan kelembaban terjaga untuk ruang server pusat data tier-III.",
-      role: "Commissioning & Advisory Consultant",
-      location: "BSD City, Tangerang",
-      client: "PT Technology Data Center Indonesia",
-      year: "2024",
-      scope: [
-        "Desain Redundansi N+2 Precision Air Conditioner",
-        "CFD Modeling Thermal Hot/Cold Aisle Containment",
-        "Grounding & Surge Protection Grade A",
-        "Audit ISO 27001 & TIA-942 Compliance"
-      ]
-    }
-  ];
-
+  // Dynamic Portfolio Projects (Synchronized with Admin & Supabase)
   const filteredProjects = portfolioFilter === 'all' 
-    ? projects 
-    : projects.filter(p => p.category === portfolioFilter);
+    ? projectsList 
+    : projectsList.filter(p => p.category === portfolioFilter);
 
   // Services Data
   const services = [
@@ -1364,11 +1372,11 @@ export default function App() {
                 </a>
 
                 <a 
-                  href="mailto:consultant@ldggroup.co.id?subject=Permintaan%20Konsultasi%20Teknik%20MEP%20HVAC%20-%20PT%20Lintang%20Duta%20Perkasa"
+                  href={`mailto:${siteSettings.email || 'consultant@ldpgroup.co.id'}?subject=Permintaan%20Konsultasi%20Teknik%20MEP%20HVAC%20-%20PT%20Lintang%20Duta%20Perkasa`}
                   className="btn-email-outline"
                 >
                   <Mail className="w-4 h-4" />
-                  <span>Kirim Email Resmi (consultant@ldggroup.co.id)</span>
+                  <span>Kirim Email Resmi ({siteSettings.email || 'consultant@ldpgroup.co.id'})</span>
                 </a>
               </div>
             </div>
@@ -1449,7 +1457,7 @@ export default function App() {
               <a href="#" className="brand-logo footer-logo mb-4" aria-label="Beranda LDP Technical Consultant">
                 <img 
                   src="/images/ldp_logo_white.png" 
-                  alt="PT Lintang Duta Perkasa - LDP Technical Consultant" 
+                  alt="PT Lentang Duta Perkasa - LDP Technical Consultant" 
                   className="brand-logo-img footer-logo-img" 
                 />
               </a>
@@ -1459,7 +1467,7 @@ export default function App() {
               <div className="footer-part-of">
                 <span className="text-orange-400 font-bold">PART OF MW GROUP</span>
                 <span className="text-slate-500">•</span>
-                <span className="text-slate-300">NIB: 0129116242975</span>
+                <span className="text-slate-300">NIB: {siteSettings.nib || '0129116242975'}</span>
               </div>
             </div>
 
@@ -1499,7 +1507,7 @@ export default function App() {
                   <MapPin className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
                   <div>
                     <strong className="text-white block font-semibold mb-0.5">Indonesia Head Office:</strong>
-                    <span>Tangerang Selatan, Banten - Indonesia</span>
+                    <span>{siteSettings.address || 'Tangerang Selatan, Banten - Indonesia'}</span>
                   </div>
                 </li>
                 <li className="footer-contact-item">
@@ -1513,7 +1521,7 @@ export default function App() {
                   <Mail className="w-4 h-4 text-sky-400 flex-shrink-0 mt-0.5" />
                   <div>
                     <strong className="text-white block font-semibold mb-0.5">Email Resmi:</strong>
-                    <a href="mailto:consultant@ldggroup.co.id" className="hover:text-sky-400 transition-colors">consultant@ldggroup.co.id</a>
+                    <a href={`mailto:${siteSettings.email || 'consultant@ldpgroup.co.id'}`} className="hover:text-sky-400 transition-colors">{siteSettings.email || 'consultant@ldpgroup.co.id'}</a>
                   </div>
                 </li>
               </ul>
@@ -1522,7 +1530,7 @@ export default function App() {
 
           <div className="footer-bottom">
             <div className="text-slate-400">
-              © 2026 <strong>PT Lintang Duta Perkasa</strong> (LDP Technical Consultant). All Rights Reserved.
+              © 2026 <strong>PT Lentang Duta Perkasa</strong> (LDP Technical Consultant). All Rights Reserved.
             </div>
             <div className="flex items-center gap-4 text-slate-400 text-xs">
               <a href="#" className="hover:text-white transition-colors">Kebijakan Privasi</a>
@@ -1635,8 +1643,8 @@ export default function App() {
               <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.82rem', color: '#64748B' }}>
                 <Mail className="w-4 h-4 text-sky-500" />
                 <span>Atau kirim dokumen via email:</span>
-                <a href="mailto:consultant@ldggroup.co.id?subject=Permintaan%20Konsultasi%20Teknik%20MEP%20HVAC%20-%20PT%20Lintang%20Duta%20Perkasa" className="text-sky-600 font-bold hover:underline">
-                  consultant@ldggroup.co.id
+                <a href={`mailto:${siteSettings.email || 'consultant@ldpgroup.co.id'}?subject=Permintaan%20Konsultasi%20Teknik%20MEP%20HVAC%20-%20PT%20Lintang%20Duta%20Perkasa`} className="text-sky-600 font-bold hover:underline">
+                  {siteSettings.email || 'consultant@ldpgroup.co.id'}
                 </a>
               </div>
             </form>
@@ -1722,19 +1730,23 @@ export default function App() {
             <div className="border border-slate-200 rounded-xl p-5 bg-slate-50 mb-6 space-y-3 text-xs">
               <div className="flex justify-between py-2 border-b border-slate-200">
                 <span className="text-slate-500 font-semibold">Nomor Induk Berusaha (NIB)</span>
-                <span className="font-bold text-slate-900">0129116242975</span>
+                <span className="font-bold text-slate-900">{siteSettings.nib || '0129116242975'}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-slate-200">
-                <span className="text-slate-500 font-semibold">Status OSS</span>
-                <span className="font-bold text-emerald-600">TERVERIFIKASI AKTIF</span>
+                <span className="text-slate-500 font-semibold">Lembaga Terdaftar / Status</span>
+                <span className="font-bold text-emerald-600">{siteSettings.institution || 'OSS Kementerian Investasi RI'}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-slate-200">
-                <span className="text-slate-500 font-semibold">Sertifikat ISO</span>
-                <span className="font-bold text-slate-900">ISO 9001:2015 & ISO 45001:2018</span>
+                <span className="text-slate-500 font-semibold">Sertifikasi Acuan</span>
+                <span className="font-bold text-slate-900">{siteSettings.sni_cert || 'SNI 03-6572-2001 (HVAC)'}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-200">
+                <span className="text-slate-500 font-semibold">Supervisi Tenaga Ahli</span>
+                <span className="font-bold text-slate-900">{siteSettings.expert_supervision || 'Sertifikat SKA Utama MEP'}</span>
               </div>
               <div className="flex justify-between py-2">
-                <span className="text-slate-500 font-semibold">Kualifikasi SBU</span>
-                <span className="font-bold text-slate-900">Konsultan Perencana MEP & HVAC</span>
+                <span className="text-slate-500 font-semibold">Kualifikasi Usaha</span>
+                <span className="font-bold text-slate-900">{siteSettings.qualification || 'Konsultan Teknik MEP & HVAC'}</span>
               </div>
             </div>
 

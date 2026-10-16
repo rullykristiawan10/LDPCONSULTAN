@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { subscribeToSync, SYNC_EVENTS } from '../utils/syncManager';
+import { fetchWhatsAppContactsFromSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
 
 const DEFAULT_CONTACTS = [
   {
@@ -51,16 +53,27 @@ export default function WhatsAppWidget() {
   useEffect(() => {
     loadContacts();
 
-    const handleUpdate = () => loadContacts();
-    window.addEventListener('wa-contacts-updated', handleUpdate);
-    window.addEventListener('storage', handleUpdate);
-    window.addEventListener('focus', handleUpdate);
+    // Fetch from Supabase if connected
+    if (isSupabaseConfigured()) {
+      fetchWhatsAppContactsFromSupabase().then(cloudContacts => {
+        if (cloudContacts && cloudContacts.length > 0) {
+          setContacts(cloudContacts);
+          try {
+            localStorage.setItem('ldp_whatsapp_contacts', JSON.stringify(cloudContacts));
+          } catch (e) {}
+        }
+      });
+    }
 
-    return () => {
-      window.removeEventListener('wa-contacts-updated', handleUpdate);
-      window.removeEventListener('storage', handleUpdate);
-      window.removeEventListener('focus', handleUpdate);
-    };
+    const unsubscribe = subscribeToSync(SYNC_EVENTS.WA, (updated) => {
+      if (Array.isArray(updated) && updated.length > 0) {
+        setContacts(updated);
+      } else {
+        loadContacts();
+      }
+    });
+
+    return unsubscribe;
   }, []);
 
   useEffect(() => {

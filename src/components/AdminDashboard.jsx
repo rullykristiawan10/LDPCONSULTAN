@@ -59,8 +59,22 @@ import {
   syncArticleToSupabase, 
   deleteArticleFromSupabase,
   fetchArticlesFromSupabase,
+  fetchTeamMembersFromSupabase,
+  syncTeamMembersToSupabase,
+  fetchWhatsAppContactsFromSupabase,
+  syncWhatsAppContactsToSupabase,
+  fetchProjectsFromSupabase,
+  syncProjectsToSupabase,
+  fetchSiteSettingsFromSupabase,
+  syncSiteSettingsToSupabase,
   isSupabaseConfigured
 } from '../lib/supabaseClient';
+import {
+  broadcastSync,
+  subscribeToSync,
+  STORAGE_KEYS,
+  SYNC_EVENTS
+} from '../utils/syncManager';
 
 // Preset Avatars
 const PRESET_AVATARS = [
@@ -120,7 +134,7 @@ const handleImageFileUpload = (e, callback) => {
 };
 
 // Default WhatsApp Contacts
-const DEFAULT_WA_CONTACTS = [
+export const DEFAULT_WA_CONTACTS = [
   {
     id: 1,
     name: "Abdul Wahid, A.Md. S.Pd",
@@ -147,40 +161,53 @@ const DEFAULT_WA_CONTACTS = [
   }
 ];
 
+export const getStoredWaContacts = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.WA);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.error("Error reading WhatsApp contacts from localStorage:", e);
+  }
+  return DEFAULT_WA_CONTACTS;
+};
+
 // Initial Leadership / Team Members Data
 export const INITIAL_TEAM_MEMBERS = [
   {
     id: 1,
-    name: "Eka Supriatna, S.T.",
+    name: "Tito Riyanto, S.T.",
     badge: "TECHNICAL DIRECTOR",
     role: "Engineering Director",
-    initials: "ES",
-    image: "",
+    initials: "TR",
+    image: "/images/avatar_rizky.jpg",
     bio: "Memiliki pengalaman lebih dari 18 tahun dalam perencanaan sistem MEP & HVAC komersial & industri. Bersertifikat Ahli Utama STRA & SKA LPJK."
   },
   {
     id: 2,
-    name: "Anwar Abidin, S.Kom., M.M.",
+    name: "Abdul Wahid, A.Md. S.Pd",
     badge: "OPERATIONAL LEAD",
     role: "Operational Director",
-    initials: "AA",
-    image: "",
+    initials: "AW",
+    image: "/images/avatar_habib.jpg",
     bio: "Mengelola manajemen operasional proyek, integrasi teknologi informasi, efisiensi rantai pasok, serta kemitraan strategis MW Group."
   },
   {
     id: 3,
-    name: "Ir. Edy Mulyana, S.T., M.M. IPM",
+    name: "Ir. Ade Maulana, S.T. M.M.T.",
     badge: "SENIOR ADVISOR",
-    role: "Commercial & Technical Advisory",
-    initials: "EM",
-    image: "",
+    role: "Commercial & Sales Director",
+    initials: "AM",
+    image: "/images/avatar_ade.jpg",
     bio: "Pakar konsultan dan penasihat teknik MEP senior dengan pengalaman menangani berbagai gedung pencakar langit dan pusat data nasional."
   }
 ];
 
 export const getStoredTeamMembers = () => {
   try {
-    const saved = localStorage.getItem('ldp_team_members');
+    const saved = localStorage.getItem(STORAGE_KEYS.TEAM);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -193,10 +220,167 @@ export const getStoredTeamMembers = () => {
 
 export const saveTeamMembersToStorage = (members) => {
   try {
-    localStorage.setItem('ldp_team_members', JSON.stringify(members));
-    window.dispatchEvent(new Event('ldp-team-updated'));
+    localStorage.setItem(STORAGE_KEYS.TEAM, JSON.stringify(members));
+    broadcastSync(SYNC_EVENTS.TEAM, members);
+    if (isSupabaseConfigured()) {
+      syncTeamMembersToSupabase(members);
+    }
   } catch (e) {
     console.error('Failed to save team to storage', e);
+  }
+};
+
+// Initial Projects Data
+export const INITIAL_PROJECTS = [
+  {
+    id: 1,
+    title: "Muara Laboh Geothermal Power Plant",
+    category: "industrial",
+    badge: "MEP & HVAC CONSULTANT",
+    tag: "POWER PLANT",
+    image: "/images/geothermal_plant.jpg",
+    description: "Perencanaan dan supervisi instalasi sistem HVAC pengkondisian udara area control room & electrical room serta sistem pemadam hidran bertekanan tinggi untuk pembangkit listrik tenaga panas bumi.",
+    role: "Procurement & Construction Manager",
+    location: "Muara Laboh, Sumatera Barat",
+    client: "PT Supreme Energy Muara Laboh",
+    year: "2024 - 2025",
+    progress: 95,
+    budget: "Rp 1.45 Miliar",
+    status: "Commissioning",
+    scope: [
+      "Desain sistem HVAC Control Room & Electrical Substation",
+      "Perhitungan Heat Load & Ventilasi Industri Bertekanan Positive",
+      "Sistem Proteksi Kebakaran FM200 & Hydrant Loop",
+      "Supervisi & Testing Commissioning Tahap Akhir"
+    ]
+  },
+  {
+    id: 2,
+    title: "Portim Accommodation Complex Freeport",
+    category: "commercial",
+    badge: "AIRPORT INFRASTRUCTURE",
+    tag: "COMMERCIAL COMPLEX",
+    image: "/images/airport_complex.jpg",
+    description: "Konsultasi desain sistem HVAC khusus untuk area Mess karyawan Freeport di Timika Papua dengan memperhatikan kelembaban tinggi dan efisiensi energi maksimum.",
+    role: "Technical Safety & Compliance Team",
+    location: "Timika, Papua",
+    client: "PT Freeport Indonesia",
+    year: "2023 - 2024",
+    progress: 88,
+    budget: "Rp 2.10 Miliar",
+    status: "Pelaksanaan",
+    scope: [
+      "Audit Termal Kelembaban Udara Tropis (Dehumidification System)",
+      "Desain Chiller Plant Sentral Redundan N+1",
+      "Integrasi Building Management System (BMS)",
+      "Studi Kelayakan Efisiensi Konsumsi Daya Listrik HVAC"
+    ]
+  },
+  {
+    id: 3,
+    title: "Wisma Barito Pacific MEP Overhaul",
+    category: "commercial",
+    badge: "HIGH-RISE TOWER",
+    tag: "COMMERCIAL BUILDING",
+    image: "/images/building_architecture.jpg",
+    description: "Modernisasi & perancangan ulang sistem distribusi kelistrikan, sistem tata udara VRV/VRF, serta audit keselamatan hidran proteksi kebakaran gedung perkantoran 28 lantai.",
+    role: "Lead Engineering Consultant",
+    location: "Jakarta Selatan",
+    client: "Barito Pacific Group",
+    year: "2023",
+    progress: 100,
+    budget: "Rp 850 Juta",
+    status: "Selesai",
+    scope: [
+      "Redesain Distribusi Panel Listrik Utama LVMDP",
+      "Retrofit Chiller R22 ke VRF Inverter Ramah Lingkungan",
+      "Simulasi CFD Aliran Udara & Smoke Extraction Staircase",
+      "Penyusunan BoQ & Dokumentasi Tender EPC"
+    ]
+  },
+  {
+    id: 4,
+    title: "Data Center Precision HVAC Facility",
+    category: "industrial",
+    badge: "CRITICAL INFRASTRUCTURE",
+    tag: "DATA CENTER",
+    image: "/images/cad_workstation.jpg",
+    description: "Perencanaan sistem pendingin presisi (CRAC/CRAH) dengan toleransi suhu ketat ±0.5°C dan kelembaban terjaga untuk ruang server pusat data tier-III.",
+    role: "Commissioning & Advisory Consultant",
+    location: "BSD City, Tangerang",
+    client: "PT Technology Data Center Indonesia",
+    year: "2024",
+    progress: 70,
+    budget: "Rp 1.80 Miliar",
+    status: "Desain 3D CFD",
+    scope: [
+      "Desain Redundansi N+2 Precision Air Conditioner",
+      "CFD Modeling Thermal Hot/Cold Aisle Containment",
+      "Grounding & Surge Protection Grade A",
+      "Audit ISO 27001 & TIA-942 Compliance"
+    ]
+  }
+];
+
+export const getStoredProjects = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.PROJECTS);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.error("Error reading projects from localStorage:", e);
+  }
+  return INITIAL_PROJECTS;
+};
+
+export const saveProjectsToStorage = (projects) => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
+    broadcastSync(SYNC_EVENTS.PROJECTS, projects);
+    if (isSupabaseConfigured()) {
+      syncProjectsToSupabase(projects);
+    }
+  } catch (e) {
+    console.error("Error saving projects to localStorage:", e);
+  }
+};
+
+// Site & Legality Settings
+export const DEFAULT_SITE_SETTINGS = {
+  nib: "0129116242975",
+  institution: "OSS Kementerian Investasi RI",
+  qualification: "Konsultan Teknik MEP & HVAC",
+  sni_cert: "SNI 03-6572-2001 (HVAC)",
+  expert_supervision: "Sertifikat SKA Utama MEP",
+  hotline: "+62 838-7407-8144",
+  email: "consultant@ldpgroup.co.id",
+  address: "Menara Batavia Lt. 12, Jl. K.H. Mas Mansyur Kav. 126, Jakarta Pusat"
+};
+
+export const getStoredSiteSettings = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === 'object') return { ...DEFAULT_SITE_SETTINGS, ...parsed };
+    }
+  } catch (e) {
+    console.error("Error reading site settings from localStorage:", e);
+  }
+  return DEFAULT_SITE_SETTINGS;
+};
+
+export const saveSiteSettingsToStorage = (settings) => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+    broadcastSync(SYNC_EVENTS.SETTINGS, settings);
+    if (isSupabaseConfigured()) {
+      syncSiteSettingsToSupabase(settings);
+    }
+  } catch (e) {
+    console.error("Error saving site settings to localStorage:", e);
   }
 };
 
@@ -241,9 +425,16 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
 
   const saveWaContactsToStorage = (updatedList) => {
     setWaContacts(updatedList);
-    localStorage.setItem('ldp_whatsapp_contacts', JSON.stringify(updatedList));
-    window.dispatchEvent(new Event('wa-contacts-updated'));
-    setWaToast('Pengaturan WhatsApp berhasil diperbarui & disimpan!');
+    try {
+      localStorage.setItem(STORAGE_KEYS.WA, JSON.stringify(updatedList));
+      broadcastSync(SYNC_EVENTS.WA, updatedList);
+      if (isSupabaseConfigured()) {
+        syncWhatsAppContactsToSupabase(updatedList);
+      }
+    } catch (e) {
+      console.error("Error saving WhatsApp contacts to storage:", e);
+    }
+    setWaToast('Pengaturan WhatsApp berhasil diperbarui & tersinkronisasi ke web utama!');
     setTimeout(() => setWaToast(''), 4000);
   };
 
@@ -310,15 +501,35 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
   };
   const [teamFormData, setTeamFormData] = useState(initialTeamForm);
 
+  // Realtime cross-tab listener for all entities
   useEffect(() => {
-    const handleStorageUpdate = () => {
-      setTeamMembers(getStoredTeamMembers());
-    };
-    window.addEventListener('ldp-team-updated', handleStorageUpdate);
-    window.addEventListener('storage', handleStorageUpdate);
+    const unsubTeam = subscribeToSync(SYNC_EVENTS.TEAM, (updated) => {
+      if (Array.isArray(updated) && updated.length > 0) setTeamMembers(updated);
+      else setTeamMembers(getStoredTeamMembers());
+    });
+    const unsubWa = subscribeToSync(SYNC_EVENTS.WA, (updated) => {
+      if (Array.isArray(updated) && updated.length > 0) setWaContacts(updated);
+      else setWaContacts(getStoredWaContacts());
+    });
+    const unsubBlog = subscribeToSync(SYNC_EVENTS.BLOG, (updated) => {
+      if (Array.isArray(updated) && updated.length > 0) setArticles(updated);
+      else setArticles(getStoredArticles());
+    });
+    const unsubProjects = subscribeToSync(SYNC_EVENTS.PROJECTS, (updated) => {
+      if (Array.isArray(updated) && updated.length > 0) setProjectsList(updated);
+      else setProjectsList(getStoredProjects());
+    });
+    const unsubSettings = subscribeToSync(SYNC_EVENTS.SETTINGS, (updated) => {
+      if (updated && typeof updated === 'object') setSiteSettings(updated);
+      else setSiteSettings(getStoredSiteSettings());
+    });
+
     return () => {
-      window.removeEventListener('ldp-team-updated', handleStorageUpdate);
-      window.removeEventListener('storage', handleStorageUpdate);
+      unsubTeam();
+      unsubWa();
+      unsubBlog();
+      unsubProjects();
+      unsubSettings();
     };
   }, []);
 
@@ -458,7 +669,7 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
   const [copiedSql, setCopiedSql] = useState(false);
   const [isSyncingData, setIsSyncingData] = useState(false);
 
-  // Check initial supabase connectivity on dashboard open
+  // Check initial supabase connectivity on dashboard open & load cloud data
   useEffect(() => {
     if (isSupabaseConfigured()) {
       testSupabaseConnection().then(res => {
@@ -467,9 +678,31 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
           fetchArticlesFromSupabase().then(cloudArticles => {
             if (cloudArticles && cloudArticles.length > 0) {
               setArticles(cloudArticles);
-              try {
-                localStorage.setItem('ldp_blog_articles', JSON.stringify(cloudArticles));
-              } catch (e) {}
+              saveArticlesToStorage(cloudArticles, 'Artikel tersinkronisasi dari Supabase Cloud.');
+            }
+          });
+          fetchTeamMembersFromSupabase().then(cloudTeam => {
+            if (cloudTeam && cloudTeam.length > 0) {
+              setTeamMembers(cloudTeam);
+              saveTeamMembersToStorage(cloudTeam);
+            }
+          });
+          fetchWhatsAppContactsFromSupabase().then(cloudWa => {
+            if (cloudWa && cloudWa.length > 0) {
+              setWaContacts(cloudWa);
+              saveWaContactsToStorage(cloudWa);
+            }
+          });
+          fetchProjectsFromSupabase().then(cloudProjects => {
+            if (cloudProjects && cloudProjects.length > 0) {
+              setProjectsList(cloudProjects);
+              saveProjectsToStorage(cloudProjects);
+            }
+          });
+          fetchSiteSettingsFromSupabase().then(cloudSettings => {
+            if (cloudSettings) {
+              setSiteSettings(cloudSettings);
+              saveSiteSettingsToStorage(cloudSettings);
             }
           });
         }
@@ -505,7 +738,11 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
         const res = await syncArticleToSupabase(art);
         if (res.success) successCount++;
       }
-      setArticleToast(`Berhasil menyinkronkan ${successCount} artikel ke Supabase!`);
+      await syncTeamMembersToSupabase(teamMembers);
+      await syncWhatsAppContactsToSupabase(waContacts);
+      await syncProjectsToSupabase(projectsList);
+      await syncSiteSettingsToSupabase(siteSettings);
+      setArticleToast(`Berhasil menyinkronkan seluruh data (${successCount} artikel, ${teamMembers.length} dewan direksi, ${waContacts.length} kontak WA, ${projectsList.length} proyek) ke Cloud Supabase!`);
     } catch (e) {
       setArticleToast(`Sinkronisasi sebagian berhasil (${successCount} artikel).`);
     } finally {
@@ -563,8 +800,8 @@ CREATE POLICY "Dashboard can update consultations" ON public.consultations FOR U
   const saveArticlesToStorage = (updatedList, toastMsg = 'Artikel berhasil disimpan!') => {
     setArticles(updatedList);
     try {
-      localStorage.setItem('ldp_blog_articles', JSON.stringify(updatedList));
-      window.dispatchEvent(new Event('blog-articles-updated'));
+      localStorage.setItem(STORAGE_KEYS.BLOG, JSON.stringify(updatedList));
+      broadcastSync(SYNC_EVENTS.BLOG, updatedList);
     } catch (e) {
       console.error("Gagal menyimpan artikel ke localStorage:", e);
     }
@@ -912,54 +1149,64 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
   ]);
 
   // Projects Data
-  const [projectsList, setProjectsList] = useState([
-    {
-      id: 1,
-      title: "Muara Laboh Geothermal Power Plant",
-      client: "PT Supreme Energy Muara Laboh",
-      category: "Industrial",
-      progress: 95,
-      budget: "Rp 1.45 Miliar",
-      status: "Commissioning"
-    },
-    {
-      id: 2,
-      title: "Portim Accommodation Freeport Complex",
-      client: "PT Freeport Indonesia",
-      category: "Commercial",
-      progress: 88,
-      budget: "Rp 2.10 Miliar",
-      status: "Pelaksanaan"
-    },
-    {
-      id: 3,
-      title: "Wisma Barito Pacific MEP Overhaul",
-      client: "Barito Pacific Group",
-      category: "Commercial",
-      progress: 100,
-      budget: "Rp 850 Juta",
-      status: "Selesai"
-    },
-    {
-      id: 4,
-      title: "Data Center Precision HVAC Facility",
-      client: "PT Technology Data Center Indonesia",
-      category: "Critical Infra",
-      progress: 70,
-      budget: "Rp 1.80 Miliar",
-      status: "Desain 3D CFD"
-    }
-  ]);
+  const [projectsList, setProjectsList] = useState(getStoredProjects);
+
+  // Site & Legality Settings State
+  const [siteSettings, setSiteSettings] = useState(getStoredSiteSettings);
+  const [showEditSettingsModal, setShowEditSettingsModal] = useState(false);
+  const [settingsFormData, setSettingsFormData] = useState(siteSettings);
+  const [settingsToast, setSettingsToast] = useState('');
+
+  const handleOpenEditSettings = () => {
+    setSettingsFormData(siteSettings);
+    setShowEditSettingsModal(true);
+  };
+
+  const handleSaveSettingsSubmit = (e) => {
+    e.preventDefault();
+    setSiteSettings(settingsFormData);
+    saveSiteSettingsToStorage(settingsFormData);
+    setShowEditSettingsModal(false);
+    setSettingsToast('Dokumen legalitas & profil perusahaan berhasil disimpan & terupdate di web utama!');
+    setTimeout(() => setSettingsToast(''), 4000);
+  };
 
   // Add project modal handler
-  const [newProject, setNewProject] = useState({ title: '', client: '', category: 'Commercial', budget: '', status: 'Desain 3D CFD' });
+  const [newProject, setNewProject] = useState({ title: '', client: '', category: 'commercial', budget: '', status: 'Desain 3D CFD' });
 
   const handleAddProject = (e) => {
     e.preventDefault();
     if (!newProject.title || !newProject.client) return;
-    setProjectsList([...projectsList, { id: Date.now(), ...newProject, progress: 20 }]);
-    setNewProject({ title: '', client: '', category: 'Commercial', budget: '', status: 'Desain 3D CFD' });
+    const addedPrj = {
+      id: Date.now(),
+      title: newProject.title,
+      client: newProject.client,
+      category: (newProject.category || 'commercial').toLowerCase(),
+      badge: (newProject.category || 'commercial').toUpperCase(),
+      tag: 'PROJECT',
+      image: '/images/office_presentation.jpg',
+      description: `Perencanaan dan supervisi sistem MEP & HVAC untuk ${newProject.title}.`,
+      role: 'Lead Engineering Consultant',
+      location: 'Indonesia',
+      year: new Date().getFullYear().toString(),
+      progress: 20,
+      budget: newProject.budget || 'Rp 1 Miliar',
+      status: newProject.status || 'Desain 3D CFD',
+      scope: ['Perencanaan Teknis', 'Supervisi Lapangan']
+    };
+    const updated = [addedPrj, ...projectsList];
+    setProjectsList(updated);
+    saveProjectsToStorage(updated);
+    setNewProject({ title: '', client: '', category: 'commercial', budget: '', status: 'Desain 3D CFD' });
     setShowAddProjectModal(false);
+  };
+
+  const handleDeleteProject = (id, title) => {
+    if (window.confirm(`Hapus proyek "${title}" dari portofolio? Proyek ini tidak akan tampil lagi di website utama.`)) {
+      const updated = projectsList.filter(p => p.id !== id);
+      setProjectsList(updated);
+      saveProjectsToStorage(updated);
+    }
   };
 
   const handleDeleteLead = (id) => {
@@ -1511,10 +1758,21 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 <h3 className="admin-box-title">Daftar Portofolio Proyek Rekayasa</h3>
                 <p className="admin-box-sub">Manajemen status proyek dan progress supervisi di lapangan.</p>
               </div>
-              <button onClick={() => setShowAddProjectModal(true)} className="admin-btn-primary">
-                <Plus size={16} />
-                <span>Tambah Proyek</span>
-              </button>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <a 
+                  href="/#portfolio" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="admin-btn-secondary"
+                >
+                  <ExternalLink size={15} />
+                  <span>Lihat di Beranda</span>
+                </a>
+                <button onClick={() => setShowAddProjectModal(true)} className="admin-btn-primary">
+                  <Plus size={16} />
+                  <span>Tambah Proyek</span>
+                </button>
+              </div>
             </div>
 
             <div className="admin-projects-grid">
@@ -1541,10 +1799,15 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
 
                   <div className="admin-prj-footer">
                     <span className="text-sub">Estimasi BoQ: <strong className="text-white">{prj.budget}</strong></span>
-                    <button className="admin-link-btn">
-                      <span>Detail</span>
-                      <ArrowUpRight size={14} />
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        onClick={() => handleDeleteProject(prj.id, prj.title)}
+                        className="admin-act-btn del"
+                        title="Hapus Proyek"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1587,47 +1850,79 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
         {/* TAB 5: LEGALITY SETTINGS */}
         {activeTab === 'settings' && (
           <div className="admin-tab-content space-y">
+            {settingsToast && (
+              <div className="admin-toast-success" style={{
+                background: 'rgba(37, 211, 102, 0.15)',
+                border: '1px solid #25D366',
+                color: '#25D366',
+                padding: '12px 18px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '0.88rem',
+                fontWeight: 600,
+                marginBottom: '16px'
+              }}>
+                <Check size={18} />
+                <span>{settingsToast}</span>
+              </div>
+            )}
             <div className="admin-box">
               <div className="admin-box-header">
                 <div>
                   <h3 className="admin-box-title">Verifikasi Legalitas & NIB Perusahaan</h3>
-                  <p className="admin-box-sub">Pengaturan dokumen verifikasi hukum PT Lintang Duta Perkasa.</p>
+                  <p className="admin-box-sub">Pengaturan dokumen verifikasi hukum PT Lintang Duta Perkasa yang tersinkronisasi langsung ke modal informasi website.</p>
                 </div>
-                <span className="admin-status-tag green">TERVERIFIKASI AKTIF</span>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <a 
+                    href="/#kontak" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="admin-btn-secondary"
+                  >
+                    <ExternalLink size={15} />
+                    <span>Lihat di Beranda</span>
+                  </a>
+                  <button onClick={handleOpenEditSettings} className="admin-btn-primary">
+                    <Edit3 size={15} />
+                    <span>Edit Dokumen Legalitas</span>
+                  </button>
+                </div>
               </div>
 
               <div className="admin-legal-grid">
                 <div className="admin-legal-card">
                   <div className="admin-legal-row">
                     <span className="text-sub">Nomor NIB:</span>
-                    <strong className="text-white">0129116242975</strong>
+                    <strong className="text-white">{siteSettings.nib}</strong>
                   </div>
                   <div className="admin-legal-row">
                     <span className="text-sub">Lembaga Terdaftar:</span>
-                    <strong className="text-white">OSS Kementerian Investasi RI</strong>
+                    <strong className="text-white">{siteSettings.institution}</strong>
                   </div>
                   <div className="admin-legal-row">
                     <span className="text-sub">Kualifikasi:</span>
-                    <strong className="text-white">Konsultan Teknik MEP & HVAC</strong>
+                    <strong className="text-white">{siteSettings.qualification}</strong>
                   </div>
                 </div>
 
                 <div className="admin-legal-card">
                   <div className="admin-legal-row">
                     <span className="text-sub">Sertifikasi SNI:</span>
-                    <strong className="text-green">SNI 03-6572-2001 (HVAC)</strong>
+                    <strong className="text-green">{siteSettings.sni_cert}</strong>
                   </div>
                   <div className="admin-legal-row">
                     <span className="text-sub">Supervisi Ahli:</span>
-                    <strong className="text-white">Sertifikat SKA Utama MEP</strong>
+                    <strong className="text-white">{siteSettings.expert_supervision}</strong>
                   </div>
                   <div className="admin-legal-row">
                     <span className="text-sub">Kontak Hotline Legal:</span>
-                    <strong className="text-orange">+62 822-6000-0248</strong>
+                    <strong className="text-orange">{siteSettings.hotline}</strong>
                   </div>
                   <div className="admin-legal-row">
                     <span className="text-sub">Email Korespondensi:</span>
-                    <a href="mailto:consultant@ldggroup.co.id" className="text-blue" style={{ textDecoration: 'none', fontWeight: 'bold' }}>consultant@ldggroup.co.id</a>
+                    <a href={`mailto:${siteSettings.email}`} className="text-blue" style={{ textDecoration: 'none', fontWeight: 'bold' }}>{siteSettings.email}</a>
                   </div>
                 </div>
               </div>
@@ -1666,6 +1961,15 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 <p className="admin-box-sub">Atur tim engineer/CS, nomor WhatsApp aktif, dan foto profil yang tampil pada widget floating website.</p>
               </div>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <a 
+                  href="/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="admin-btn-secondary"
+                >
+                  <ExternalLink size={15} />
+                  <span>Lihat di Beranda</span>
+                </a>
                 <button onClick={handleResetWaContacts} className="admin-btn-secondary" title="Kembalikan ke 3 kontak default">
                   <RotateCcw size={15} />
                   <span>Reset Default</span>
@@ -1942,7 +2246,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
               </div>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <a 
-                  href="#direksi" 
+                  href="/#direksi" 
                   target="_blank" 
                   rel="noopener noreferrer" 
                   className="admin-btn-secondary"
@@ -2112,7 +2416,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
               </div>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <a 
-                  href="#blog" 
+                  href="/#blog" 
                   target="_blank" 
                   rel="noopener noreferrer" 
                   className="admin-btn-secondary"
@@ -3803,6 +4107,138 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 <span>Buka di Halaman Blog</span>
               </a>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* SITE & LEGALITY SETTINGS MODAL */}
+      {showEditSettingsModal && (
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-card" style={{ maxWidth: '640px' }}>
+            <div className="admin-modal-header">
+              <h3 className="admin-modal-title">Edit Dokumen Legalitas & Kontak Perusahaan</h3>
+              <button onClick={() => setShowEditSettingsModal(false)} className="admin-modal-close">
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSettingsSubmit}>
+              <div className="admin-form-two-col">
+                <div className="admin-form-group">
+                  <label className="admin-label">Nomor NIB <span style={{ color: '#FF6600' }}>*</span></label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Contoh: 0129116242975"
+                    value={settingsFormData.nib || ''}
+                    onChange={(e) => setSettingsFormData({ ...settingsFormData, nib: e.target.value })}
+                    className="admin-input"
+                  />
+                </div>
+
+                <div className="admin-form-group">
+                  <label className="admin-label">Lembaga Terdaftar / Penerbit <span style={{ color: '#FF6600' }}>*</span></label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Contoh: OSS Kementerian Investasi RI"
+                    value={settingsFormData.institution || ''}
+                    onChange={(e) => setSettingsFormData({ ...settingsFormData, institution: e.target.value })}
+                    className="admin-input"
+                  />
+                </div>
+              </div>
+
+              <div className="admin-form-two-col">
+                <div className="admin-form-group">
+                  <label className="admin-label">Kualifikasi Usaha <span style={{ color: '#FF6600' }}>*</span></label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Contoh: Konsultan Teknik MEP & HVAC"
+                    value={settingsFormData.qualification || ''}
+                    onChange={(e) => setSettingsFormData({ ...settingsFormData, qualification: e.target.value })}
+                    className="admin-input"
+                  />
+                </div>
+
+                <div className="admin-form-group">
+                  <label className="admin-label">Sertifikasi SNI / Standar Acuan</label>
+                  <input 
+                    type="text" 
+                    placeholder="Contoh: SNI 03-6572-2001 (HVAC)"
+                    value={settingsFormData.sni_cert || ''}
+                    onChange={(e) => setSettingsFormData({ ...settingsFormData, sni_cert: e.target.value })}
+                    className="admin-input"
+                  />
+                </div>
+              </div>
+
+              <div className="admin-form-two-col">
+                <div className="admin-form-group">
+                  <label className="admin-label">Supervisi Tenaga Ahli</label>
+                  <input 
+                    type="text" 
+                    placeholder="Contoh: Sertifikat SKA Utama MEP"
+                    value={settingsFormData.expert_supervision || ''}
+                    onChange={(e) => setSettingsFormData({ ...settingsFormData, expert_supervision: e.target.value })}
+                    className="admin-input"
+                  />
+                </div>
+
+                <div className="admin-form-group">
+                  <label className="admin-label">Kontak Hotline Legal / Kantor</label>
+                  <input 
+                    type="text" 
+                    placeholder="Contoh: +62 838-7407-8144"
+                    value={settingsFormData.hotline || ''}
+                    onChange={(e) => setSettingsFormData({ ...settingsFormData, hotline: e.target.value })}
+                    className="admin-input"
+                  />
+                </div>
+              </div>
+
+              <div className="admin-form-group">
+                <label className="admin-label">Email Korespondensi Resmi</label>
+                <input 
+                  type="email" 
+                  placeholder="Contoh: consultant@ldpgroup.co.id"
+                  value={settingsFormData.email || ''}
+                  onChange={(e) => setSettingsFormData({ ...settingsFormData, email: e.target.value })}
+                  className="admin-input"
+                />
+              </div>
+
+              <div className="admin-form-group">
+                <label className="admin-label">Alamat Domisili Kantor Operasional</label>
+                <textarea 
+                  rows={2}
+                  placeholder="Alamat kantor konsultan..."
+                  value={settingsFormData.address || ''}
+                  onChange={(e) => setSettingsFormData({ ...settingsFormData, address: e.target.value })}
+                  className="admin-input"
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+
+              <div className="admin-modal-footer" style={{ borderTop: '1px solid #1E293B', paddingTop: '16px', marginTop: '16px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setShowEditSettingsModal(false)}
+                  className="admin-btn-secondary"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit" 
+                  className="admin-btn-primary"
+                  style={{ minWidth: '160px', justifyContent: 'center' }}
+                >
+                  <Check size={16} />
+                  <span>Simpan Pengaturan</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

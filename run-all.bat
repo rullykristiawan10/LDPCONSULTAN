@@ -1,5 +1,5 @@
 @echo off
-title LDP CONSULTAN - Local Server
+title LDP Technical Consultant - Local Server
 cd /d "%~dp0"
 
 echo ========================================================
