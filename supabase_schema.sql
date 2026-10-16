@@ -209,9 +209,9 @@ ON CONFLICT (id) DO NOTHING;
 -- Seed WhatsApp Contacts
 INSERT INTO public.whatsapp_contacts (id, name, role, phone, image, active)
 VALUES 
-(1, 'Abdul Wahid, A.Md. S.Pd', 'Operational Director', '6283874078144', '/images/avatar_habib.jpg', true),
-(2, 'Tito Riyanto, S.T', 'Engineering Director', '6281573713348', '/images/avatar_rizky.jpg', true),
-(3, 'Ir. Ade Maulana, S.T. M.M.T', 'Commercial & Sales Director', '6281389713127', '/images/avatar_ade.jpg', true)
+(1, 'Abdul Wahid, A.Md. S.Pd', 'Operational Director', '6283874078144', '', true),
+(2, 'Tito Riyanto, S.T', 'Engineering Director', '6281573713348', '', true),
+(3, 'Ir. Ade Maulana, S.T. M.M.T', 'Commercial & Sales Director', '6281389713127', '', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed Default Articles

@@ -172,13 +172,13 @@ const handleImageFileUpload = (e, callback) => {
   reader.readAsDataURL(file);
 };
 
-// Default WhatsApp Contacts
+// Default WhatsApp Contacts (Tanpa Foto / Menggunakan Inisial Badge)
 export const DEFAULT_WA_CONTACTS = [
   {
     id: 1,
     name: "Abdul Wahid, A.Md. S.Pd",
     role: "Operational Director",
-    image: "/images/avatar_habib.jpg",
+    image: "",
     phone: "6283874078144",
     active: true
   },
@@ -186,7 +186,7 @@ export const DEFAULT_WA_CONTACTS = [
     id: 2,
     name: "Tito Riyanto, S.T",
     role: "Engineering Director",
-    image: "/images/avatar_rizky.jpg",
+    image: "",
     phone: "6281573713348",
     active: true
   },
@@ -194,7 +194,7 @@ export const DEFAULT_WA_CONTACTS = [
     id: 3,
     name: "Ir. Ade Maulana, S.T. M.M.T",
     role: "Commercial & Sales Director",
-    image: "/images/avatar_ade.jpg",
+    image: "",
     phone: "6281389713127",
     active: true
   }
@@ -205,7 +205,14 @@ export const getStoredWaContacts = () => {
     const saved = localStorage.getItem(STORAGE_KEYS.WA);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map(c => {
+          if (c.image && (c.image.includes('/images/avatar_') || c.image.startsWith('/images/'))) {
+            return { ...c, image: '' };
+          }
+          return c;
+        });
+      }
     }
   } catch (e) {
     console.error("Error reading WhatsApp contacts from localStorage:", e);
@@ -443,7 +450,14 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
       const saved = localStorage.getItem('ldp_whatsapp_contacts');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map(c => {
+            if (c.image && (c.image.includes('/images/avatar_') || c.image.startsWith('/images/'))) {
+              return { ...c, image: '' };
+            }
+            return c;
+          });
+        }
       }
     } catch (e) {
       console.error("Error reading WhatsApp contacts from localStorage:", e);
@@ -457,7 +471,7 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
     name: '',
     role: '',
     phone: '628',
-    image: '/images/avatar_ade.jpg',
+    image: '',
     active: true
   });
   const [waToast, setWaToast] = useState('');
@@ -523,7 +537,7 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
       name: '',
       role: '',
       phone: '628',
-      image: '/images/avatar_ade.jpg',
+      image: '',
       active: true
     });
     setShowAddWaModal(false);
@@ -2014,6 +2028,21 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                   <ExternalLink size={15} />
                   <span>Lihat di Beranda</span>
                 </a>
+                <button 
+                  onClick={() => {
+                    if (window.confirm('Hapus semua foto profil kontak WhatsApp? Kontak akan beralih ke inisial badge yang rapi.')) {
+                      const cleared = waContacts.map(c => ({ ...c, image: '' }));
+                      saveWaContactsToStorage(cleared);
+                      alert('Semua foto profil kontak WhatsApp telah berhasil dihapus!');
+                    }
+                  }} 
+                  className="admin-btn-secondary" 
+                  style={{ color: '#EF4444', borderColor: 'rgba(239, 68, 68, 0.4)' }}
+                  title="Hapus foto dari semua kontak WhatsApp (Gunakan Inisial Badge)"
+                >
+                  <Trash2 size={15} />
+                  <span>Hapus Semua Foto WA</span>
+                </button>
                 <button onClick={handleResetWaContacts} className="admin-btn-secondary" title="Kembalikan ke 3 kontak default">
                   <RotateCcw size={15} />
                   <span>Reset Default</span>
@@ -2055,12 +2084,33 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <img 
-                          src={contact.image || "/images/avatar_ade.jpg"} 
-                          alt={contact.name} 
-                          style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #25D366' }}
-                          onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
-                        />
+                        {contact.image ? (
+                          <img 
+                            src={contact.image} 
+                            alt={contact.name} 
+                            style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #25D366' }}
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div 
+                            style={{
+                              width: '48px',
+                              height: '48px',
+                              borderRadius: '50%',
+                              background: 'linear-gradient(135deg, #128C7E, #25D366)',
+                              color: '#FFFFFF',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 700,
+                              fontSize: '1rem',
+                              border: '2px solid #25D366',
+                              flexShrink: 0
+                            }}
+                          >
+                            {contact.name ? contact.name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() : 'WA'}
+                          </div>
+                        )}
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <h4 style={{ margin: 0, color: '#FFFFFF', fontSize: '0.95rem', fontWeight: 600 }}>{contact.name}</h4>
@@ -2163,12 +2213,32 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                         justifyContent: 'space-between' 
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <img 
-                            src={c.image || "/images/avatar_ade.jpg"} 
-                            alt={c.name} 
-                            style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }}
-                            onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
-                          />
+                          {c.image ? (
+                            <img 
+                              src={c.image} 
+                              alt={c.name} 
+                              style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }}
+                              onError={(e) => { e.target.style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div 
+                              style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '50%',
+                                background: 'linear-gradient(135deg, #128C7E, #25D366)',
+                                color: '#FFFFFF',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 700,
+                                fontSize: '0.8rem',
+                                flexShrink: 0
+                              }}
+                            >
+                              {c.name ? c.name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() : 'WA'}
+                            </div>
+                          )}
                           <div>
                             <div style={{ color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 600 }}>{c.name}</div>
                             <div style={{ color: '#94A3B8', fontSize: '0.72rem' }}>{c.role}</div>
@@ -3105,14 +3175,14 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                           border: '3px solid #25D366',
                           boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
                         }}
-                        onError={(e) => { e.target.src = "/images/avatar_habib.jpg"; }}
+                        onError={(e) => { e.target.style.display = 'none'; }}
                       />
                     ) : (
                       <div style={{
                         width: '60px',
                         height: '60px',
                         borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #FF6600, #EA580C)',
+                        background: 'linear-gradient(135deg, #128C7E, #25D366)',
                         color: '#fff',
                         display: 'flex',
                         alignItems: 'center',
@@ -3318,21 +3388,38 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 
                 {/* Current Avatar Preview & Upload Action */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', margin: '8px 0 12px' }}>
-                  <div style={{ position: 'relative' }}>
-                    <img 
-                      src={newWaContact.image || "/images/avatar_ade.jpg"} 
-                      alt="Preview" 
-                      style={{ 
-                        width: '60px', 
-                        height: '60px', 
-                        borderRadius: '50%', 
-                        objectFit: 'cover', 
+                    {newWaContact.image ? (
+                      <img 
+                        src={newWaContact.image} 
+                        alt="Preview" 
+                        style={{ 
+                          width: '60px', 
+                          height: '60px', 
+                          borderRadius: '50%', 
+                          objectFit: 'cover', 
+                          border: '3px solid #25D366',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+                        }}
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: '60px',
+                        height: '60px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #128C7E, #25D366)',
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 700,
+                        fontSize: '1.2rem',
                         border: '3px solid #25D366',
                         boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
-                      }}
-                      onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
-                    />
-                  </div>
+                      }}>
+                        {newWaContact.name ? newWaContact.name.substring(0, 2).toUpperCase() : 'WA'}
+                      </div>
+                    )}
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
                     <label 
