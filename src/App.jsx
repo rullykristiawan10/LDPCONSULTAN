@@ -1479,11 +1479,6 @@ export default function App() {
               <p className="footer-desc">
                 Konsultan teknik profesional spesialis perancangan sistem MEP (Mechanical, Electrical, Plumbing) dan HVAC Engineering terpercaya di Indonesia. Berkomitmen pada keselamatan K3, presisi desain, dan efisiensi energi.
               </p>
-              <div className="footer-part-of">
-                <span className="text-orange-400 font-bold">PART OF MW GROUP</span>
-                <span className="text-slate-500">•</span>
-                <span className="text-slate-300">NIB: {siteSettings.nib || '0129116242975'}</span>
-              </div>
             </div>
 
             {/* Col 2: Navigation Links */}

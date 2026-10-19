@@ -8,7 +8,7 @@ const DEFAULT_CONTACTS = [
     id: 1,
     name: "Abdul Wahid, A.Md. S.Pd",
     role: "Operational Director",
-    image: "",
+    image: "/images/abdul_wahid.jpg",
     phone: "6283874078144",
     active: true
   },
@@ -16,7 +16,7 @@ const DEFAULT_CONTACTS = [
     id: 2,
     name: "Tito Riyanto, S.T",
     role: "Engineering Director",
-    image: "",
+    image: "/images/tito_riyanto.jpg",
     phone: "6281573713348",
     active: true
   },
@@ -24,7 +24,7 @@ const DEFAULT_CONTACTS = [
     id: 3,
     name: "Ir. Ade Maulana, S.T. M.M.T",
     role: "Commercial & Sales Director",
-    image: "",
+    image: "/images/ade_maulana.jpg",
     phone: "6281389713127",
     active: true
   }
@@ -34,11 +34,12 @@ export default function WhatsAppWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [contacts, setContacts] = useState(DEFAULT_CONTACTS);
 
-  const cleanLegacyImages = (contactList) => {
+  const fillDefaultImages = (contactList) => {
     if (!Array.isArray(contactList)) return DEFAULT_CONTACTS;
     return contactList.map(c => {
-      if (c.image && (c.image.includes('/images/avatar_') || c.image.startsWith('/images/'))) {
-        return { ...c, image: '' };
+      if (!c.image || c.image.includes('/images/avatar_')) {
+        const def = DEFAULT_CONTACTS.find(d => d.id === c.id || d.name === c.name);
+        if (def && def.image) return { ...c, image: def.image };
       }
       return c;
     });
@@ -50,8 +51,8 @@ export default function WhatsAppWidget() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const cleaned = cleanLegacyImages(parsed);
-          setContacts(cleaned);
+          const filled = fillDefaultImages(parsed);
+          setContacts(filled);
           return;
         }
       }
@@ -70,10 +71,10 @@ export default function WhatsAppWidget() {
         if (cloudContacts && cloudContacts.length > 0) {
           const hasLocal = localStorage.getItem('ldp_whatsapp_contacts');
           if (!hasLocal) {
-            const cleaned = cleanLegacyImages(cloudContacts);
-            setContacts(cleaned);
+            const filled = fillDefaultImages(cloudContacts);
+            setContacts(filled);
             try {
-              localStorage.setItem('ldp_whatsapp_contacts', JSON.stringify(cleaned));
+              localStorage.setItem('ldp_whatsapp_contacts', JSON.stringify(filled));
             } catch (e) {}
           }
         }
@@ -82,7 +83,7 @@ export default function WhatsAppWidget() {
 
     const unsubscribe = subscribeToSync(SYNC_EVENTS.WA, (updated) => {
       if (Array.isArray(updated) && updated.length > 0) {
-        setContacts(cleanLegacyImages(updated));
+        setContacts(fillDefaultImages(updated));
       } else {
         loadContacts();
       }

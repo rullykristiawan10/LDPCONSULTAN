@@ -89,9 +89,9 @@ const PRESET_AVATARS = [
 
 // Preset Authors for Blog Articles
 const PRESET_AUTHORS = [
-  { name: "Tito Riyanto, S.T.", role: "Engineering Director", avatar: "/images/avatar_rizky.jpg" },
-  { name: "Abdul Wahid, A.Md. S.Pd", role: "Operational Director", avatar: "/images/avatar_habib.jpg" },
-  { name: "Ir. Ade Maulana, S.T. M.M.T", role: "Commercial & Sales Director", avatar: "/images/avatar_ade.jpg" },
+  { name: "Tito Riyanto, S.T.", role: "Engineering Director", avatar: "/images/tito_riyanto.jpg" },
+  { name: "Abdul Wahid, A.Md. S.Pd", role: "Operational Director", avatar: "/images/abdul_wahid.jpg" },
+  { name: "Ir. Ade Maulana, S.T. M.M.T", role: "Commercial & Sales Director", avatar: "/images/ade_maulana.jpg" },
   { name: "Fajar Abdilah, S.T.", role: "Lead Fire Protection Engineer", avatar: "/images/avatar_fajar.jpg" },
   { name: "Dian Pratiwi, S.T.", role: "Senior Green Building Engineer", avatar: "/images/avatar_dian.jpg" },
   { name: "Hasbi Ash, S.T.", role: "Data Center Infrastructure Engineer", avatar: "/images/avatar_hasbi.jpg" },
@@ -172,13 +172,13 @@ const handleImageFileUpload = (e, callback) => {
   reader.readAsDataURL(file);
 };
 
-// Default WhatsApp Contacts (Tanpa Foto / Menggunakan Inisial Badge)
+// Default WhatsApp Contacts
 export const DEFAULT_WA_CONTACTS = [
   {
     id: 1,
     name: "Abdul Wahid, A.Md. S.Pd",
     role: "Operational Director",
-    image: "",
+    image: "/images/abdul_wahid.jpg",
     phone: "6283874078144",
     active: true
   },
@@ -186,7 +186,7 @@ export const DEFAULT_WA_CONTACTS = [
     id: 2,
     name: "Tito Riyanto, S.T",
     role: "Engineering Director",
-    image: "",
+    image: "/images/tito_riyanto.jpg",
     phone: "6281573713348",
     active: true
   },
@@ -194,7 +194,7 @@ export const DEFAULT_WA_CONTACTS = [
     id: 3,
     name: "Ir. Ade Maulana, S.T. M.M.T",
     role: "Commercial & Sales Director",
-    image: "",
+    image: "/images/ade_maulana.jpg",
     phone: "6281389713127",
     active: true
   }
@@ -207,8 +207,9 @@ export const getStoredWaContacts = () => {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed.map(c => {
-          if (c.image && (c.image.includes('/images/avatar_') || c.image.startsWith('/images/'))) {
-            return { ...c, image: '' };
+          if (!c.image || c.image.includes('/images/avatar_')) {
+            const def = DEFAULT_WA_CONTACTS.find(d => d.id === c.id || d.name === c.name);
+            if (def && def.image) return { ...c, image: def.image };
           }
           return c;
         });
@@ -228,7 +229,7 @@ export const INITIAL_TEAM_MEMBERS = [
     badge: "TECHNICAL DIRECTOR",
     role: "Engineering Director",
     initials: "TR",
-    image: "/images/avatar_rizky.jpg",
+    image: "/images/tito_riyanto.jpg",
     bio: "Memiliki pengalaman lebih dari 18 tahun dalam perencanaan sistem MEP & HVAC komersial & industri. Bersertifikat Ahli Utama STRA & SKA LPJK."
   },
   {
@@ -237,7 +238,7 @@ export const INITIAL_TEAM_MEMBERS = [
     badge: "OPERATIONAL LEAD",
     role: "Operational Director",
     initials: "AW",
-    image: "/images/avatar_habib.jpg",
+    image: "/images/abdul_wahid.jpg",
     bio: "Mengelola manajemen operasional proyek, integrasi teknologi informasi, efisiensi rantai pasok, serta kemitraan strategis MW Group."
   },
   {
@@ -246,7 +247,7 @@ export const INITIAL_TEAM_MEMBERS = [
     badge: "SENIOR ADVISOR",
     role: "Commercial & Sales Director",
     initials: "AM",
-    image: "/images/avatar_ade.jpg",
+    image: "/images/ade_maulana.jpg",
     bio: "Pakar konsultan dan penasihat teknik MEP senior dengan pengalaman menangani berbagai gedung pencakar langit dan pusat data nasional."
   }
 ];
@@ -452,8 +453,9 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map(c => {
-            if (c.image && (c.image.includes('/images/avatar_') || c.image.startsWith('/images/'))) {
-              return { ...c, image: '' };
+            if (!c.image || c.image.includes('/images/avatar_')) {
+              const def = DEFAULT_WA_CONTACTS.find(d => d.id === c.id || d.name === c.name);
+              if (def && def.image) return { ...c, image: def.image };
             }
             return c;
           });
@@ -3377,10 +3379,10 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                       )}
 
                       {/* Tombol Kembalikan Foto Asli */}
-                      {String(editingWaContact.id) === '1' && editingWaContact.image !== '/images/avatar_habib.jpg' && (
+                      {String(editingWaContact.id) === '1' && editingWaContact.image !== '/images/abdul_wahid.jpg' && (
                         <button
                           type="button"
-                          onClick={() => setEditingWaContact({ ...editingWaContact, image: '/images/avatar_habib.jpg' })}
+                          onClick={() => setEditingWaContact({ ...editingWaContact, image: '/images/abdul_wahid.jpg' })}
                           className="admin-btn-secondary"
                           style={{ padding: '6px 12px', fontSize: '0.78rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                           title="Kembalikan ke foto asli Abdul Wahid (jas hitam)"
@@ -3389,10 +3391,10 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                           <span>Foto Asli Abdul Wahid</span>
                         </button>
                       )}
-                      {String(editingWaContact.id) === '2' && editingWaContact.image !== '/images/avatar_rizky.jpg' && (
+                      {String(editingWaContact.id) === '2' && editingWaContact.image !== '/images/tito_riyanto.jpg' && (
                         <button
                           type="button"
-                          onClick={() => setEditingWaContact({ ...editingWaContact, image: '/images/avatar_rizky.jpg' })}
+                          onClick={() => setEditingWaContact({ ...editingWaContact, image: '/images/tito_riyanto.jpg' })}
                           className="admin-btn-secondary"
                           style={{ padding: '6px 12px', fontSize: '0.78rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                           title="Kembalikan ke foto asli Tito Riyanto"
@@ -3401,10 +3403,10 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                           <span>Foto Asli Tito</span>
                         </button>
                       )}
-                      {String(editingWaContact.id) === '3' && editingWaContact.image !== '/images/avatar_ade.jpg' && (
+                      {String(editingWaContact.id) === '3' && editingWaContact.image !== '/images/ade_maulana.jpg' && (
                         <button
                           type="button"
-                          onClick={() => setEditingWaContact({ ...editingWaContact, image: '/images/avatar_ade.jpg' })}
+                          onClick={() => setEditingWaContact({ ...editingWaContact, image: '/images/ade_maulana.jpg' })}
                           className="admin-btn-secondary"
                           style={{ padding: '6px 12px', fontSize: '0.78rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                           title="Kembalikan ke foto asli Ade Maulana"
@@ -4720,10 +4722,10 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                         </button>
                       )}
 
-                      {String(editingTeamMemberId) === '1' && teamFormData.image !== '/images/avatar_rizky.jpg' && (
+                      {String(editingTeamMemberId) === '1' && teamFormData.image !== '/images/tito_riyanto.jpg' && (
                         <button
                           type="button"
-                          onClick={() => setTeamFormData({ ...teamFormData, image: '/images/avatar_rizky.jpg' })}
+                          onClick={() => setTeamFormData({ ...teamFormData, image: '/images/tito_riyanto.jpg' })}
                           className="admin-btn-secondary"
                           style={{ padding: '6px 12px', fontSize: '0.78rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                           title="Kembalikan ke foto asli Tito Riyanto"
@@ -4733,10 +4735,10 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                         </button>
                       )}
 
-                      {String(editingTeamMemberId) === '2' && teamFormData.image !== '/images/avatar_habib.jpg' && (
+                      {String(editingTeamMemberId) === '2' && teamFormData.image !== '/images/abdul_wahid.jpg' && (
                         <button
                           type="button"
-                          onClick={() => setTeamFormData({ ...teamFormData, image: '/images/avatar_habib.jpg' })}
+                          onClick={() => setTeamFormData({ ...teamFormData, image: '/images/abdul_wahid.jpg' })}
                           className="admin-btn-secondary"
                           style={{ padding: '6px 12px', fontSize: '0.78rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                           title="Kembalikan ke foto asli Abdul Wahid (jas hitam)"
@@ -4746,10 +4748,10 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                         </button>
                       )}
 
-                      {String(editingTeamMemberId) === '3' && teamFormData.image !== '/images/avatar_ade.jpg' && (
+                      {String(editingTeamMemberId) === '3' && teamFormData.image !== '/images/ade_maulana.jpg' && (
                         <button
                           type="button"
-                          onClick={() => setTeamFormData({ ...teamFormData, image: '/images/avatar_ade.jpg' })}
+                          onClick={() => setTeamFormData({ ...teamFormData, image: '/images/ade_maulana.jpg' })}
                           className="admin-btn-secondary"
                           style={{ padding: '6px 12px', fontSize: '0.78rem', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                           title="Kembalikan ke foto asli Ade Maulana"
