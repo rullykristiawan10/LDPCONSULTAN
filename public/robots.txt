@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# Disallow admin path or private drafts if any
+Disallow: /#admin
+
+Sitemap: https://ldpconsultan.co.id/sitemap.xml

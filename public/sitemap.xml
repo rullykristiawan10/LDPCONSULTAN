@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+  
+  <!-- Halaman Utama LDP Technical Consultant -->
+  <url>
+    <loc>https://ldpconsultan.co.id/</loc>
+    <lastmod>2026-10-19</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- Artikel & Publikasi Teknik -->
+  <url>
+    <loc>https://ldpconsultan.co.id/#blog/audit-energi-optimasi-chiller-hvac-ashrae</loc>
+    <lastmod>2026-10-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://ldpconsultan.co.id/#blog/desain-tata-udara-cleanroom-iso-14644-farmasi</loc>
+    <lastmod>2026-10-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://ldpconsultan.co.id/#blog/value-engineering-listrik-mep-pabrik-industri</loc>
+    <lastmod>2026-10-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://ldpconsultan.co.id/#blog/simulasi-cfd-3d-aliran-udara-data-center</loc>
+    <lastmod>2026-09-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://ldpconsultan.co.id/#blog/perbedaan-sistem-vrf-vs-chiller-plant-gedung</loc>
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://ldpconsultan.co.id/#blog/kepatuhan-k3-sertifikasi-slf-proteksi-kebakaran-gedung</loc>
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+</urlset>
