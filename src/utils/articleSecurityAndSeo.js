@@ -9,7 +9,7 @@ export const DEFAULT_SITE_METADATA = {
   title: "LDP Technical Consultant - PT LENTANG Duta Perkasa",
   description: "LDP Technical Consultant (PT LENTANG Duta Perkasa) adalah konsultan teknik profesional terpercaya untuk perencanaan, audit, dan supervisi sistem MEP & HVAC Engineering di Indonesia.",
   keywords: "LDP Technical Consultant, PT LENTANG Duta Perkasa, MEP Engineering, HVAC System, MW Group, Konsultan Teknik, Audit HVAC, Feasibility Study, BoQ",
-  siteUrl: "https://ldpconsultan.co.id",
+  siteUrl: "https://ldpconsultant.co.id",
   logoUrl: "/images/logo.svg"
 };
 
@@ -381,7 +381,7 @@ export const analyzeArticleSeo = (article) => {
     securityStatus,
     serpPreview: {
       title: title || 'Judul Publikasi Rekayasa MEP HVAC | PT LENTANG Duta Perkasa',
-      url: `https://ldpconsultan.co.id/#blog/${slug || 'audit-energi-chiller'}`,
+      url: `https://ldpconsultant.co.id/#blog/${slug || 'audit-energi-chiller'}`,
       description: summary || 'Baca ulasan profesional dan panduan standar rekayasa teknik dari konsultan ahli PT LENTANG Duta Perkasa.'
     }
   };
