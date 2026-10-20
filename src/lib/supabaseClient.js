@@ -547,6 +547,7 @@ export const fetchAdminUsersFromSupabase = async () => {
     return data.map(u => ({
       id: u.id,
       username: u.username,
+      email: u.email || (u.username === 'admin' ? 'admin@ldpconsultant.co.id' : `${u.username}@ldpconsultant.co.id`),
       fullName: u.full_name || u.fullName,
       role: u.role || 'author',
       passwordHash: u.password_hash || u.passwordHash,
@@ -569,6 +570,7 @@ export const syncAdminUsersToSupabase = async (usersList) => {
     const payload = usersList.map(u => ({
       ...(u.id && typeof u.id === 'number' && u.id < 10000000000 ? { id: u.id } : {}),
       username: u.username.toLowerCase().trim(),
+      email: (u.email || (u.username === 'admin' ? 'admin@ldpconsultant.co.id' : `${u.username}@ldpconsultant.co.id`)).toLowerCase().trim(),
       full_name: u.fullName.trim(),
       role: u.role || 'author',
       password_hash: u.passwordHash,

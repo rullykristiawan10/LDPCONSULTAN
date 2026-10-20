@@ -94,6 +94,7 @@ export const DEFAULT_ADMIN_USERS = [
   {
     id: 1,
     username: 'admin',
+    email: 'admin@ldpconsultant.co.id',
     fullName: 'Administrator LDP',
     role: 'super_admin',
     passwordHash: '13147744cdcbe6901a917ee6e6992fee86d732afe4884af9d1665a9f55b782de', // default master: LDP@2026#Consultant
@@ -105,6 +106,7 @@ export const DEFAULT_ADMIN_USERS = [
   {
     id: 2,
     username: 'penulis',
+    email: 'penulis@ldpconsultant.co.id',
     fullName: 'Tito Riyanto, S.T.',
     role: 'author',
     passwordHash: '766a1ac91dc2c3a86c8f2d826ae02f75de2d7c66f3d23dab797b21c314a37d91', // default: penulis123
@@ -121,7 +123,12 @@ export const getStoredAdminUsers = () => {
     const saved = localStorage.getItem(STORAGE_KEYS.USERS);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map(u => ({
+          ...u,
+          email: u.email || (u.username === 'admin' ? 'admin@ldpconsultant.co.id' : `${u.username}@ldpconsultant.co.id`)
+        }));
+      }
     }
   } catch (e) {
     console.error("Error reading users from storage:", e);
@@ -540,6 +547,7 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
   const [editingUserId, setEditingUserId] = useState(null);
   const [userFormData, setUserFormData] = useState({
     fullName: '',
+    email: '',
     username: '',
     role: 'author',
     password: '',
@@ -556,6 +564,16 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
   const [resetPwdTargetUser, setResetPwdTargetUser] = useState(null);
   const [resetNewPassword, setResetNewPassword] = useState('');
   const [showResetNewPassword, setShowResetNewPassword] = useState(false);
+
+  // My Profile Modal State (Bisa edit foto & data diri sendiri)
+  const [myProfileModalOpen, setMyProfileModalOpen] = useState(false);
+  const [myProfileData, setMyProfileData] = useState({
+    fullName: '',
+    email: '',
+    titlePosition: '',
+    avatar: ''
+  });
+  const [myProfileToast, setMyProfileToast] = useState('');
 
   // Change Password State (in Settings tab)
   const [pwdChangeForm, setPwdChangeForm] = useState({ current: '', newPwd: '', confirm: '' });
@@ -1383,7 +1401,12 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
       return;
     }
 
-    const trimmedUser = usernameInput.trim().toLowerCase();
+    const trimmedInput = usernameInput.trim().toLowerCase();
+    if (!trimmedInput) {
+      setLoginError('Alamat email atau username wajib diisi!');
+      return;
+    }
+
     setIsLoggingIn(true);
     setLoginError('');
 
@@ -1392,14 +1415,18 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
       const storedCustomHash = localStorage.getItem('ldp_admin_pwd_hash');
       const targetMasterHash = storedCustomHash || DEFAULT_ADMIN_HASH;
 
-      // 1. Search for matching user in usersList
-      let matchedUser = usersList.find(u => u.username.toLowerCase() === trimmedUser);
+      // 1. Search for matching user in usersList by EMAIL or USERNAME
+      let matchedUser = usersList.find(u => 
+        (u.email && u.email.toLowerCase() === trimmedInput) || 
+        (u.username && u.username.toLowerCase() === trimmedInput)
+      );
 
-      // 2. If username is empty or 'admin' and password matches master admin hash:
-      if ((!trimmedUser || trimmedUser === 'admin') && inputHash === targetMasterHash) {
-        matchedUser = usersList.find(u => u.username.toLowerCase() === 'admin') || {
+      // 2. If input is 'admin' or 'admin@ldpconsultant.co.id' and password matches master admin hash:
+      if ((trimmedInput === 'admin' || trimmedInput === 'admin@ldpconsultant.co.id') && inputHash === targetMasterHash) {
+        matchedUser = usersList.find(u => u.username.toLowerCase() === 'admin' || u.email?.toLowerCase() === 'admin@ldpconsultant.co.id') || {
           id: 1,
           username: 'admin',
+          email: 'admin@ldpconsultant.co.id',
           fullName: 'Administrator LDP',
           role: 'super_admin',
           titlePosition: 'System & Engineering Admin',
@@ -1408,7 +1435,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
         };
       } else if (matchedUser) {
         // For specific user, check password
-        const isMaster = matchedUser.username.toLowerCase() === 'admin';
+        const isMaster = matchedUser.username.toLowerCase() === 'admin' || matchedUser.email?.toLowerCase() === 'admin@ldpconsultant.co.id';
         const validHash = isMaster 
           ? (matchedUser.passwordHash === inputHash || targetMasterHash === inputHash)
           : (matchedUser.passwordHash === inputHash);
@@ -1432,6 +1459,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
         const sessionUser = {
           id: matchedUser.id,
           username: matchedUser.username,
+          email: matchedUser.email || (matchedUser.username === 'admin' ? 'admin@ldpconsultant.co.id' : `${matchedUser.username}@ldpconsultant.co.id`),
           fullName: matchedUser.fullName,
           role: matchedUser.role, // 'super_admin' or 'author'
           titlePosition: matchedUser.titlePosition,
@@ -1470,7 +1498,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
           setLoginError('Akses ditolak! Terlalu banyak percobaan salah. Portal dikunci selama 15 menit untuk mencegah peretasan.');
         } else {
           const remaining = MAX_LOGIN_ATTEMPTS - currentFailed;
-          setLoginError(`Username atau password salah! Sisa percobaan: ${remaining} kali sebelum sistem otomatis terkunci.`);
+          setLoginError(`Email atau password salah! Sisa percobaan: ${remaining} kali sebelum sistem otomatis terkunci.`);
         }
       }
     } catch (err) {
@@ -1513,6 +1541,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
     setEditingUserId(null);
     setUserFormData({
       fullName: '',
+      email: '',
       username: '',
       role: 'author',
       password: '',
@@ -1527,6 +1556,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
     setEditingUserId(u.id);
     setUserFormData({
       fullName: u.fullName,
+      email: u.email || (u.username === 'admin' ? 'admin@ldpconsultant.co.id' : `${u.username}@ldpconsultant.co.id`),
       username: u.username,
       role: u.role,
       password: '',
@@ -1537,21 +1567,196 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
     setUserModalOpen(true);
   };
 
+  // Helper Foto Upload dengan Kompresi Ringan Client-Side (< 35KB)
+  const handleUserPhotoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      alert("Ukuran gambar terlalu besar! Maksimal 8MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_DIM = 360;
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.88);
+        setUserFormData(prev => ({ ...prev, avatar: compressedBase64 }));
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // Handlers untuk "Profil Saya" (edit foto dan data diri sendiri dari header)
+  const handleOpenMyProfile = () => {
+    if (!currentUser) return;
+    const userInList = usersList.find(u => u.id === currentUser.id) || currentUser;
+    setMyProfileData({
+      fullName: userInList.fullName || '',
+      email: userInList.email || (userInList.username === 'admin' ? 'admin@ldpconsultant.co.id' : `${userInList.username}@ldpconsultant.co.id`),
+      titlePosition: userInList.titlePosition || '',
+      avatar: userInList.avatar || '/images/avatar_ade.jpg'
+    });
+    setMyProfileToast('');
+    setMyProfileModalOpen(true);
+  };
+
+  const handleMyProfilePhotoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      alert("Ukuran gambar terlalu besar! Maksimal 8MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_DIM = 360;
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.88);
+        setMyProfileData(prev => ({ ...prev, avatar: compressedBase64 }));
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleSaveMyProfileSubmit = (e) => {
+    e.preventDefault();
+    if (!currentUser) return;
+
+    const cleanFull = myProfileData.fullName.trim();
+    const cleanEmail = myProfileData.email.trim().toLowerCase();
+
+    if (!cleanFull) {
+      alert("Nama lengkap wajib diisi!");
+      return;
+    }
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      alert("Alamat email tidak valid! Contoh: nama@ldpconsultant.co.id");
+      return;
+    }
+
+    const dup = usersList.find(u => u.email && u.email.toLowerCase() === cleanEmail && u.id !== currentUser.id);
+    if (dup) {
+      alert(`Alamat email "${cleanEmail}" sudah digunakan oleh akun lain!`);
+      return;
+    }
+
+    const updatedUser = {
+      ...(usersList.find(u => u.id === currentUser.id) || currentUser),
+      fullName: cleanFull,
+      email: cleanEmail,
+      titlePosition: myProfileData.titlePosition.trim() || currentUser.titlePosition,
+      avatar: myProfileData.avatar || currentUser.avatar
+    };
+
+    const updatedList = usersList.map(u => u.id === currentUser.id ? updatedUser : u);
+    saveUsersToStorage(updatedList, "Profil & foto Anda berhasil diperbarui!");
+
+    const newSessionUser = {
+      ...currentUser,
+      fullName: updatedUser.fullName,
+      email: updatedUser.email,
+      titlePosition: updatedUser.titlePosition,
+      avatar: updatedUser.avatar
+    };
+    setCurrentUser(newSessionUser);
+
+    try {
+      const currentRaw = sessionStorage.getItem('ldp_admin_session');
+      if (currentRaw) {
+        const p = JSON.parse(currentRaw);
+        p.user = newSessionUser;
+        sessionStorage.setItem('ldp_admin_session', JSON.stringify(p));
+      }
+    } catch (err) {}
+
+    setMyProfileToast("Foto profil & data Anda berhasil disimpan!");
+    setTimeout(() => {
+      setMyProfileToast('');
+      setMyProfileModalOpen(false);
+    }, 1200);
+  };
+
   const handleSaveUserSubmit = async (e) => {
     e.preventDefault();
     const cleanFull = userFormData.fullName.trim();
-    const cleanUser = userFormData.username.trim().toLowerCase();
+    const cleanEmail = (userFormData.email || '').trim().toLowerCase();
+    let cleanUser = (userFormData.username || '').trim().toLowerCase();
 
     if (!cleanFull) {
       alert("Nama lengkap pengguna wajib diisi!");
       return;
     }
+    if (!cleanEmail) {
+      alert("Alamat email wajib diisi untuk login pengguna!");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      alert("Format email tidak valid! Contoh: penulis@ldpconsultant.co.id");
+      return;
+    }
+
+    // Auto-derive username if empty
+    if (!cleanUser) {
+      cleanUser = cleanEmail.split('@')[0].replace(/[^a-z0-9_.-]/g, '');
+    }
+
     if (!cleanUser || cleanUser.length < 3) {
       alert("Username minimal harus 3 karakter huruf / angka!");
       return;
     }
     if (!/^[a-z0-9_.-]+$/.test(cleanUser)) {
       alert("Username hanya boleh berisi huruf kecil, angka, garis bawah (_), atau titik (.)!");
+      return;
+    }
+
+    // Check duplicate email
+    const duplicateEmail = usersList.find(u => 
+      u.email && u.email.toLowerCase() === cleanEmail && u.id !== editingUserId
+    );
+    if (duplicateEmail) {
+      alert(`Alamat email "${cleanEmail}" sudah digunakan oleh pengguna lain! Silakan gunakan email yang berbeda.`);
       return;
     }
 
@@ -1572,6 +1777,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
       const newUser = {
         id: Date.now(),
         fullName: cleanFull,
+        email: cleanEmail,
         username: cleanUser,
         role: userFormData.role,
         passwordHash: hashed,
@@ -1581,7 +1787,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
         createdAt: new Date().toISOString().split('T')[0]
       };
       const updated = [...usersList, newUser];
-      saveUsersToStorage(updated, `Akun baru "${newUser.fullName}" (@${newUser.username}) dengan role ${newUser.role === 'author' ? 'Penulis' : 'Super Admin'} berhasil ditambahkan!`);
+      saveUsersToStorage(updated, `Akun baru "${newUser.fullName}" (${newUser.email}) dengan role ${newUser.role === 'author' ? 'Penulis' : 'Super Admin'} berhasil ditambahkan!`);
     } else {
       // Edit user
       const existing = usersList.find(u => u.id === editingUserId);
@@ -1597,6 +1803,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
       const updatedUser = {
         ...existing,
         fullName: cleanFull,
+        email: cleanEmail,
         username: cleanUser,
         role: userFormData.role,
         passwordHash: finalHash,
@@ -1612,6 +1819,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
         const newSessionUser = {
           ...currentUser,
           fullName: updatedUser.fullName,
+          email: updatedUser.email,
           username: updatedUser.username,
           role: updatedUser.role,
           titlePosition: updatedUser.titlePosition,
@@ -1942,21 +2150,29 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
 
           <form onSubmit={handleLoginSubmit} className="admin-login-form">
             <div className="admin-form-group">
-              <label className="admin-label">Username / ID Pengguna</label>
+              <label className="admin-label">
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Mail size={14} style={{ color: '#FF6600' }} />
+                  <span>Email Akun Pengguna</span>
+                </span>
+              </label>
               <div className="admin-input-wrapper">
                 <input 
                   type="text" 
                   disabled={isLocked || isLoggingIn}
-                  placeholder="Contoh: admin atau penulis..."
+                  placeholder="Contoh: nama@ldpconsultant.co.id atau admin..."
                   value={usernameInput}
                   onChange={(e) => setUsernameInput(e.target.value)}
                   className="admin-input"
-                  autoComplete="username"
+                  autoComplete="email username"
                   autoFocus
                 />
               </div>
-              <div className="admin-hint" style={{ fontSize: '0.73rem', color: '#94A3B8', marginTop: '4px' }}>
-                Admin: <strong>admin</strong> | Penulis: <strong>penulis</strong> (atau username yang terdaftar)
+              <div className="admin-hint" style={{ fontSize: '0.73rem', color: '#94A3B8', marginTop: '5px', lineHeight: 1.45 }}>
+                Masuk menggunakan email dan password masing-masing akun.<br />
+                <span style={{ color: '#64748B' }}>
+                  Akun awal: <strong>admin@ldpconsultant.co.id</strong> atau <strong>penulis@ldpconsultant.co.id</strong>
+                </span>
               </div>
             </div>
 
@@ -2239,7 +2455,11 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
               <span>SYSTEM ONLINE</span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div 
+              onClick={handleOpenMyProfile}
+              className="admin-header-profile-badge"
+              title="Klik untuk mengedit foto & profil akun Anda"
+            >
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#FFFFFF', lineHeight: 1.2 }}>
                   {currentUser?.fullName || (currentUser?.role === 'author' ? 'Penulis Artikel' : 'Administrator')}
@@ -2251,7 +2471,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 </div>
               </div>
 
-              <div className="admin-user-avatar" style={{ overflow: 'hidden', padding: 0 }}>
+              <div className="admin-user-avatar" style={{ overflow: 'hidden', padding: 0, position: 'relative' }}>
                 {currentUser?.avatar ? (
                   <img 
                     src={currentUser.avatar} 
@@ -2262,6 +2482,21 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 ) : (
                   (currentUser?.fullName || 'AD').substring(0, 2).toUpperCase()
                 )}
+                <div style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  right: 0,
+                  background: 'rgba(4, 14, 28, 0.85)',
+                  width: '15px',
+                  height: '15px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1px solid rgba(255,102,0,0.5)'
+                }}>
+                  <Camera size={9} style={{ color: '#FF6600' }} />
+                </div>
               </div>
             </div>
           </div>
@@ -4101,12 +4336,13 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                   <thead>
                     <tr>
                       <th style={{ minWidth: '220px' }}>Nama & Profil Pengguna</th>
-                      <th style={{ minWidth: '130px' }}>Username Login</th>
-                      <th style={{ minWidth: '150px' }}>Peran / Hak Akses</th>
-                      <th style={{ minWidth: '180px' }}>Spesialisasi Jabatan</th>
-                      <th style={{ minWidth: '100px', textAlign: 'center' }}>Status</th>
-                      <th style={{ minWidth: '110px' }}>Terdaftar</th>
-                      <th style={{ minWidth: '160px', textAlign: 'right' }}>Aksi</th>
+                      <th style={{ minWidth: '180px' }}>Email Login</th>
+                      <th style={{ minWidth: '120px' }}>Username</th>
+                      <th style={{ minWidth: '140px' }}>Peran / Hak Akses</th>
+                      <th style={{ minWidth: '170px' }}>Spesialisasi Jabatan</th>
+                      <th style={{ minWidth: '90px', textAlign: 'center' }}>Status</th>
+                      <th style={{ minWidth: '100px' }}>Terdaftar</th>
+                      <th style={{ minWidth: '150px', textAlign: 'right' }}>Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -4114,6 +4350,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                       const q = userSearch.toLowerCase().trim();
                       const matchSearch = q === '' ||
                         u.fullName?.toLowerCase().includes(q) ||
+                        u.email?.toLowerCase().includes(q) ||
                         u.username?.toLowerCase().includes(q) ||
                         u.titlePosition?.toLowerCase().includes(q);
 
@@ -4126,17 +4363,20 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                     }).map((u) => {
                       const isMasterAdmin = u.username.toLowerCase() === 'admin';
                       const isSelf = currentUser && currentUser.id === u.id;
+                      const userEmail = u.email || (u.username === 'admin' ? 'admin@ldpconsultant.co.id' : `${u.username}@ldpconsultant.co.id`);
 
                       return (
                         <tr key={u.id}>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              <img 
-                                src={u.avatar || "/images/avatar_ade.jpg"} 
-                                alt={u.fullName} 
-                                style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #1E293B', flexShrink: 0 }}
-                                onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
-                              />
+                              <div style={{ position: 'relative' }}>
+                                <img 
+                                  src={u.avatar || "/images/avatar_ade.jpg"} 
+                                  alt={u.fullName} 
+                                  style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #1E293B', flexShrink: 0 }}
+                                  onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
+                                />
+                              </div>
                               <div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                   <strong className="text-white" style={{ fontSize: '0.86rem' }}>{u.fullName}</strong>
@@ -4159,12 +4399,19 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                           </td>
 
                           <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#38BDF8', fontSize: '0.82rem' }}>
+                              <Mail size={13} style={{ flexShrink: 0, color: '#FF6600' }} />
+                              <span>{userEmail}</span>
+                            </div>
+                          </td>
+
+                          <td>
                             <code style={{ 
                               background: '#040E1C', 
                               padding: '3px 8px', 
                               borderRadius: '6px', 
-                              color: '#38BDF8', 
-                              fontSize: '0.8rem',
+                              color: '#94A3B8', 
+                              fontSize: '0.78rem',
                               border: '1px solid #1E293B'
                             }}>
                               @{u.username}
@@ -6038,36 +6285,56 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 />
               </div>
 
-              {/* Username & Posisi Row */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              {/* Email & Username Row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '14px' }}>
                 <div className="admin-form-group">
-                  <label className="admin-label">Username Login <span style={{ color: '#FF6600' }}>*</span></label>
+                  <label className="admin-label">
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Mail size={13} style={{ color: '#FF6600' }} />
+                      <span>Alamat Email (Login) <span style={{ color: '#FF6600' }}>*</span></span>
+                    </span>
+                  </label>
+                  <input 
+                    type="email" 
+                    required
+                    placeholder="Contoh: penulis@ldpconsultant.co.id"
+                    value={userFormData.email}
+                    onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value.toLowerCase().trim() })}
+                    className="admin-input"
+                  />
+                  <span style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '3px' }}>
+                    Email utama untuk login portal
+                  </span>
+                </div>
+
+                <div className="admin-form-group">
+                  <label className="admin-label">Username Login (Opsional)</label>
                   <input 
                     type="text" 
-                    required
                     placeholder="Contoh: budi_penulis"
                     value={userFormData.username}
                     onChange={(e) => setUserFormData({ ...userFormData, username: e.target.value.toLowerCase().replace(/\s+/g, '') })}
                     className="admin-input"
                   />
                   <span style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '3px' }}>
-                    Huruf kecil & angka (tanpa spasi)
+                    ID singkat (huruf kecil/angka)
                   </span>
                 </div>
+              </div>
 
-                <div className="admin-form-group">
-                  <label className="admin-label">Jabatan / Spesialisasi</label>
-                  <input 
-                    type="text" 
-                    placeholder="Contoh: HVAC Specialist / Writer"
-                    value={userFormData.titlePosition}
-                    onChange={(e) => setUserFormData({ ...userFormData, titlePosition: e.target.value })}
-                    className="admin-input"
-                  />
-                  <span style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '3px' }}>
-                    Ditampilkan di header & artikel
-                  </span>
-                </div>
+              {/* Jabatan / Spesialisasi */}
+              <div className="admin-form-group">
+                <label className="admin-label">Jabatan / Spesialisasi Teknik</label>
+                <input 
+                  type="text" 
+                  placeholder="Contoh: HVAC Specialist / Consultant Engineer / Writer"
+                  value={userFormData.titlePosition}
+                  onChange={(e) => setUserFormData({ ...userFormData, titlePosition: e.target.value })}
+                  className="admin-input"
+                />
+                <span style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '3px' }}>
+                  Ditampilkan di profil header & kartu penulis artikel
+                </span>
               </div>
 
               {/* Hak Akses / Role Selector */}
@@ -6134,10 +6401,59 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 </span>
               </div>
 
-              {/* Pilihan Avatar Foto */}
+              {/* FOTO PROFIL (BISA UPLOAD / GANTI / EDIT FOTO) */}
               <div className="admin-form-group">
-                <label className="admin-label">Pilih Foto / Avatar Penulis</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', margin: '6px 0 10px' }}>
+                <label className="admin-label">Foto Profil Pengguna</label>
+                
+                <div className="admin-photo-upload-box">
+                  <div className="admin-avatar-preview-wrap">
+                    <img 
+                      src={userFormData.avatar || "/images/avatar_ade.jpg"} 
+                      alt="Preview Foto" 
+                      onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
+                    />
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <label 
+                        htmlFor="user-photo-upload-input"
+                        className="admin-btn-secondary"
+                        style={{ cursor: 'pointer', padding: '7px 14px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <Camera size={15} style={{ color: '#FF6600' }} />
+                        <span>Unggah Foto dari Perangkat</span>
+                      </label>
+                      <input 
+                        id="user-photo-upload-input"
+                        type="file" 
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={handleUserPhotoUpload}
+                      />
+
+                      {userFormData.avatar && (
+                        <button
+                          type="button"
+                          onClick={() => setUserFormData(prev => ({ ...prev, avatar: '/images/avatar_ade.jpg' }))}
+                          className="admin-btn-secondary"
+                          style={{ padding: '7px 12px', fontSize: '0.78rem', color: '#94A3B8' }}
+                          title="Kembalikan ke avatar default"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '6px' }}>
+                      Pilih foto dari komputer/HP (JPG, PNG, WEBP). Foto otomatis dikompres agar tajam & hemat memori.
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', margin: '10px 0 6px' }}>
+                  Atau pilih dari avatar preset:
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
                   {PRESET_AVATARS.map((av) => (
                     <button
                       key={av.id}
@@ -6150,9 +6466,13 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                     </button>
                   ))}
                 </div>
+
+                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', marginBottom: '4px' }}>
+                  Atau ketik URL foto langsung:
+                </div>
                 <input 
                   type="text" 
-                  placeholder="Atau ketik URL foto kustom..."
+                  placeholder="https://... atau /images/..."
                   value={userFormData.avatar}
                   onChange={(e) => setUserFormData({ ...userFormData, avatar: e.target.value })}
                   className="admin-input"
@@ -6198,6 +6518,190 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 >
                   <CheckCircle2 size={16} />
                   <span>{editingUserId ? 'Simpan Perubahan' : 'Buat Pengguna Baru'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MY PROFILE MODAL (EDIT FOTO & PROFIL SAYA) */}
+      {myProfileModalOpen && (
+        <div className="admin-modal-overlay" onClick={() => setMyProfileModalOpen(false)}>
+          <div className="admin-modal-card" style={{ maxWidth: '540px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div className="admin-stat-icon-wrap orange" style={{ width: '36px', height: '36px' }}>
+                  <Camera size={18} />
+                </div>
+                <div>
+                  <h3 className="admin-modal-title">Edit Foto & Profil Saya</h3>
+                  <p style={{ margin: 0, fontSize: '0.74rem', color: '#94A3B8' }}>
+                    Perbarui foto profil dan data akun login Anda
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setMyProfileModalOpen(false)} className="admin-modal-close">
+                <X size={20} />
+              </button>
+            </div>
+
+            {myProfileToast && (
+              <div style={{
+                background: 'rgba(34, 197, 94, 0.15)',
+                border: '1px solid #22C55E',
+                color: '#86EFAC',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '0.84rem',
+                margin: '14px 20px 0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <Check size={16} />
+                <span>{myProfileToast}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveMyProfileSubmit} className="admin-modal-body space-y">
+              {/* UPLOAD FOTO PROFIL SECTION */}
+              <div className="admin-form-group">
+                <label className="admin-label">Foto Profil Anda</label>
+                
+                <div className="admin-photo-upload-box">
+                  <div className="admin-avatar-preview-wrap" style={{ width: '74px', height: '74px' }}>
+                    <img 
+                      src={myProfileData.avatar || "/images/avatar_ade.jpg"} 
+                      alt="Foto Saya" 
+                      onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
+                    />
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <label 
+                        htmlFor="my-profile-photo-input"
+                        className="admin-btn-secondary"
+                        style={{ cursor: 'pointer', padding: '7px 14px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <Camera size={15} style={{ color: '#FF6600' }} />
+                        <span>Ganti / Unggah Foto</span>
+                      </label>
+                      <input 
+                        id="my-profile-photo-input"
+                        type="file" 
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={handleMyProfilePhotoUpload}
+                      />
+
+                      {myProfileData.avatar && (
+                        <button
+                          type="button"
+                          onClick={() => setMyProfileData(prev => ({ ...prev, avatar: '/images/avatar_ade.jpg' }))}
+                          className="admin-btn-secondary"
+                          style={{ padding: '7px 12px', fontSize: '0.78rem', color: '#94A3B8' }}
+                          title="Reset ke foto default"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '6px' }}>
+                      Unggah foto asli Anda dari komputer atau galeri ponsel.
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', margin: '10px 0 6px' }}>
+                  Atau pilih avatar cepat:
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                  {PRESET_AVATARS.map((av) => (
+                    <button
+                      key={av.id}
+                      type="button"
+                      onClick={() => setMyProfileData(prev => ({ ...prev, avatar: av.url }))}
+                      className={`admin-avatar-preset-btn ${myProfileData.avatar === av.url ? 'active' : ''}`}
+                      title={av.name}
+                    >
+                      <img src={av.url} alt={av.name} onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }} />
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', marginBottom: '4px' }}>
+                  Atau masukkan URL foto:
+                </div>
+                <input 
+                  type="text" 
+                  placeholder="https://... atau /images/..."
+                  value={myProfileData.avatar}
+                  onChange={(e) => setMyProfileData(prev => ({ ...prev, avatar: e.target.value }))}
+                  className="admin-input"
+                  style={{ fontSize: '0.8rem' }}
+                />
+              </div>
+
+              {/* Nama Lengkap */}
+              <div className="admin-form-group">
+                <label className="admin-label">Nama Lengkap & Gelar <span style={{ color: '#FF6600' }}>*</span></label>
+                <input 
+                  type="text" 
+                  required
+                  value={myProfileData.fullName}
+                  onChange={(e) => setMyProfileData({ ...myProfileData, fullName: e.target.value })}
+                  className="admin-input"
+                />
+              </div>
+
+              {/* Alamat Email (Login) */}
+              <div className="admin-form-group">
+                <label className="admin-label">
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Mail size={13} style={{ color: '#FF6600' }} />
+                    <span>Alamat Email (Login) <span style={{ color: '#FF6600' }}>*</span></span>
+                  </span>
+                </label>
+                <input 
+                  type="email" 
+                  required
+                  value={myProfileData.email}
+                  onChange={(e) => setMyProfileData({ ...myProfileData, email: e.target.value.toLowerCase().trim() })}
+                  className="admin-input"
+                />
+                <span style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '3px' }}>
+                  Digunakan untuk masuk ke akun Anda
+                </span>
+              </div>
+
+              {/* Jabatan / Spesialisasi */}
+              <div className="admin-form-group">
+                <label className="admin-label">Jabatan / Spesialisasi Teknik</label>
+                <input 
+                  type="text" 
+                  value={myProfileData.titlePosition}
+                  onChange={(e) => setMyProfileData({ ...myProfileData, titlePosition: e.target.value })}
+                  className="admin-input"
+                />
+              </div>
+
+              <div className="admin-modal-footer" style={{ borderTop: '1px solid #1E293B', paddingTop: '16px', marginTop: '16px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setMyProfileModalOpen(false)}
+                  className="admin-btn-secondary"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit" 
+                  className="admin-btn-primary"
+                  style={{ minWidth: '160px', justifyContent: 'center' }}
+                >
+                  <CheckCircle2 size={16} />
+                  <span>Simpan Profil & Foto</span>
                 </button>
               </div>
             </form>
