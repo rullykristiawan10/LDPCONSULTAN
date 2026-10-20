@@ -30,7 +30,8 @@ import {
   Sliders,
   CheckSquare,
   ArrowUp,
-  BookOpen
+  BookOpen,
+  Lock
 } from 'lucide-react';
 import AdminDashboard, { 
   getStoredTeamMembers, 
@@ -228,7 +229,7 @@ export default function App() {
   // Separate Route Detection (#admin, #blog)
   useEffect(() => {
     const checkRoutes = () => {
-      const isHashAdmin = window.location.hash === '#admin';
+      const isHashAdmin = window.location.hash === '#admin' || window.location.hash === '#ldp-portal' || window.location.hash === '#portal';
       const isPathAdmin = window.location.pathname === '/admin' || window.location.pathname === '/admin/';
       const isHashBlog = window.location.hash === '#blog' || window.location.hash.startsWith('#blog');
       const isPathBlog = window.location.pathname === '/blog' || window.location.pathname === '/blog/';
@@ -1547,7 +1548,10 @@ export default function App() {
               <span>•</span>
               <a href="#" className="hover:text-white transition-colors">Syarat & Ketentuan</a>
               <span>•</span>
-              <a href="#admin" className="hover:text-orange-400 transition-colors opacity-50 hover:opacity-100">Portal Admin</a>
+              <a href="#admin" title="Portal Internal" className="hover:text-slate-300 transition-colors opacity-25 hover:opacity-80 flex items-center gap-1.5" aria-label="Portal Internal">
+                <Lock size={11} />
+                <span>Portal Internal</span>
+              </a>
             </div>
           </div>
         </div>

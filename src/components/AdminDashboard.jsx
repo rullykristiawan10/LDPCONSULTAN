@@ -43,7 +43,9 @@ import {
   ExternalLink,
   Share2,
   Folder,
-  Database
+  Database,
+  Key,
+  ShieldAlert
 } from 'lucide-react';
 import { INITIAL_BLOG_ARTICLES, getStoredArticles } from './BlogPage';
 import { 
@@ -75,6 +77,34 @@ import {
   STORAGE_KEYS,
   SYNC_EVENTS
 } from '../utils/syncManager';
+
+// ==========================================
+// SECURITY & CRYPTOGRAPHY (SHA-256 ENCRYPTED)
+// ==========================================
+const ADMIN_SALT = 'LDP_SALT_2026_SECURE';
+// Salted SHA-256 for default master password: "LDP@2026#Consultant"
+const DEFAULT_ADMIN_HASH = '13147744cdcbe6901a917ee6e6992fee86d732afe4884af9d1665a9f55b782de';
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 Menit
+
+async function computeAdminHash(pwd) {
+  try {
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+      const data = new TextEncoder().encode(ADMIN_SALT + pwd);
+      const buf = await window.crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch (e) {
+    console.error("Crypto error:", e);
+  }
+  let hash = 0;
+  const str = ADMIN_SALT + pwd;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return 'fallback_' + Math.abs(hash);
+}
 
 // Preset Avatars
 const PRESET_AVATARS = [
@@ -432,11 +462,60 @@ export const saveSiteSettingsToStorage = (settings) => {
 };
 
 export default function AdminDashboard({ onClose, onReturnToSite }) {
-  // Authentication State
+  // Authentication & Security State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockoutRemaining, setLockoutRemaining] = useState(0);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+
+  // Change Password State (in Settings tab)
+  const [pwdChangeForm, setPwdChangeForm] = useState({ current: '', newPwd: '', confirm: '' });
+  const [pwdChangeToast, setPwdChangeToast] = useState({ type: '', message: '' });
+  const [isChangingPwd, setIsChangingPwd] = useState(false);
+
+  // Authentication Session & Lockout Monitoring
+  useEffect(() => {
+    // 1. Session check (sessionStorage expires on browser close)
+    try {
+      const rawSession = sessionStorage.getItem('ldp_admin_session');
+      if (rawSession) {
+        const parsed = JSON.parse(rawSession);
+        if (parsed.auth && parsed.expiresAt > Date.now()) {
+          setIsAuthenticated(true);
+        } else {
+          sessionStorage.removeItem('ldp_admin_session');
+        }
+      }
+    } catch (e) {
+      sessionStorage.removeItem('ldp_admin_session');
+    }
+
+    // 2. Lockout check
+    const checkLockStatus = () => {
+      try {
+        const lockUntil = parseInt(localStorage.getItem('ldp_admin_lockout_until') || '0', 10);
+        const now = Date.now();
+        if (lockUntil > now) {
+          const rem = Math.ceil((lockUntil - now) / 1000);
+          setIsLocked(true);
+          setLockoutRemaining(rem);
+        } else {
+          setIsLocked(false);
+          setLockoutRemaining(0);
+        }
+      } catch (e) {
+        setIsLocked(false);
+      }
+    };
+
+    checkLockStatus();
+    const interval = setInterval(checkLockStatus, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Dashboard Tabs & Filter States
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'leads', 'projects', 'calculator', 'settings', 'whatsapp'
@@ -1132,15 +1211,117 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
   };
 
 
-  // Login handler
-  const handleLoginSubmit = (e) => {
+  // Secure Login Handler (SHA-256 Verified + Brute-force Protected)
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    const validPasswords = ['admin', 'ldp2026', 'admin123'];
-    if (validPasswords.includes(passwordInput.trim().toLowerCase())) {
-      setIsAuthenticated(true);
-      setLoginError('');
-    } else {
-      setLoginError('Password salah! Masukkan "admin" atau "ldp2026"');
+    if (isLocked) return;
+
+    const trimmedInput = passwordInput.trim();
+    if (!trimmedInput) return;
+
+    setIsLoggingIn(true);
+    setLoginError('');
+
+    try {
+      const inputHash = await computeAdminHash(trimmedInput);
+      const storedCustomHash = localStorage.getItem('ldp_admin_pwd_hash');
+      const targetHash = storedCustomHash || DEFAULT_ADMIN_HASH;
+
+      if (inputHash === targetHash) {
+        // Login Berhasil
+        localStorage.removeItem('ldp_admin_failed_count');
+        localStorage.removeItem('ldp_admin_lockout_until');
+        sessionStorage.setItem('ldp_admin_session', JSON.stringify({
+          auth: true,
+          loginTime: Date.now(),
+          expiresAt: Date.now() + 2 * 60 * 60 * 1000 // 2 Jam sesi aktif
+        }));
+        setIsAuthenticated(true);
+        setPasswordInput('');
+        setLoginError('');
+        setFailedAttempts(0);
+      } else {
+        // Login Gagal -> Catat Percobaan
+        const currentFailed = parseInt(localStorage.getItem('ldp_admin_failed_count') || '0', 10) + 1;
+        localStorage.setItem('ldp_admin_failed_count', currentFailed.toString());
+        setFailedAttempts(currentFailed);
+
+        if (currentFailed >= MAX_LOGIN_ATTEMPTS) {
+          const lockoutEnd = Date.now() + LOCKOUT_DURATION_MS;
+          localStorage.setItem('ldp_admin_lockout_until', lockoutEnd.toString());
+          setIsLocked(true);
+          setLockoutRemaining(Math.ceil(LOCKOUT_DURATION_MS / 1000));
+          setLoginError('Akses ditolak! Terlalu banyak percobaan salah. Portal dikunci selama 15 menit untuk mencegah peretasan.');
+        } else {
+          const remaining = MAX_LOGIN_ATTEMPTS - currentFailed;
+          setLoginError(`Password salah! Sisa percobaan: ${remaining} kali sebelum sistem otomatis terkunci.`);
+        }
+      }
+    } catch (err) {
+      console.error("Login verification error:", err);
+      setLoginError("Terjadi kendala saat memproses verifikasi keamanan.");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  // Secure Logout Handler
+  const handleLogout = () => {
+    sessionStorage.removeItem('ldp_admin_session');
+    setIsAuthenticated(false);
+    setPasswordInput('');
+    setLoginError('');
+  };
+
+  // Change Password Handler (SHA-256 Encrypted)
+  const handleChangePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setPwdChangeToast({ type: '', message: '' });
+
+    if (!pwdChangeForm.current || !pwdChangeForm.newPwd) {
+      setPwdChangeToast({ type: 'error', message: 'Semua kolom password wajib diisi.' });
+      return;
+    }
+
+    if (pwdChangeForm.newPwd.length < 8) {
+      setPwdChangeToast({ type: 'error', message: 'Password baru minimal harus 8 karakter dengan kombinasi angka & simbol.' });
+      return;
+    }
+
+    if (pwdChangeForm.newPwd !== pwdChangeForm.confirm) {
+      setPwdChangeToast({ type: 'error', message: 'Konfirmasi password baru tidak cocok!' });
+      return;
+    }
+
+    setIsChangingPwd(true);
+    try {
+      const currentInputHash = await computeAdminHash(pwdChangeForm.current.trim());
+      const storedCustomHash = localStorage.getItem('ldp_admin_pwd_hash');
+      const targetHash = storedCustomHash || DEFAULT_ADMIN_HASH;
+
+      if (currentInputHash !== targetHash) {
+        setPwdChangeToast({ type: 'error', message: 'Password saat ini salah!' });
+        setIsChangingPwd(false);
+        return;
+      }
+
+      const newHash = await computeAdminHash(pwdChangeForm.newPwd.trim());
+      localStorage.setItem('ldp_admin_pwd_hash', newHash);
+      setPwdChangeToast({ type: 'success', message: 'Password admin berhasil diganti! Gunakan password baru ini untuk login berikutnya.' });
+      setPwdChangeForm({ current: '', newPwd: '', confirm: '' });
+    } catch (err) {
+      console.error(err);
+      setPwdChangeToast({ type: 'error', message: 'Gagal memperbarui password.' });
+    } finally {
+      setIsChangingPwd(false);
+    }
+  };
+
+  // Reset to default password handler
+  const handleResetDefaultPassword = () => {
+    if (window.confirm("Kembalikan password admin ke password default sistem (LDP@2026#Consultant)?")) {
+      localStorage.removeItem('ldp_admin_pwd_hash');
+      setPwdChangeToast({ type: 'success', message: 'Password admin telah dikembalikan ke kata sandi bawaan sistem!' });
     }
   };
 
@@ -1308,6 +1489,18 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
           <h2 className="admin-login-title">Portal Keamanan Admin</h2>
           <p className="admin-login-subtitle">PT LENTANG Duta Perkasa — LDP Technical Consultant</p>
 
+          {isLocked && (
+            <div className="admin-alert-error" style={{ marginBottom: '16px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #EF4444', color: '#FCA5A5', padding: '12px 14px', borderRadius: '8px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+              <ShieldAlert size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <strong style={{ display: 'block', fontSize: '0.88rem' }}>Akses Terkunci Sementara</strong>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', lineHeight: 1.5 }}>
+                  Terlalu banyak kesalahan. Sistem dikunci selama <strong>{Math.floor(lockoutRemaining / 60)} menit {lockoutRemaining % 60} detik</strong> untuk mencegah akses ilegal.
+                </p>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleLoginSubmit} className="admin-login-form">
             <div className="admin-form-group">
               <label className="admin-label">Password Akses Admin</label>
@@ -1315,32 +1508,55 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 <input 
                   type={showPassword ? "text" : "password"}
                   required
-                  placeholder="Masukkan password admin..."
+                  disabled={isLocked || isLoggingIn}
+                  placeholder={isLocked ? "Sistem sedang dikunci..." : "Masukkan password admin..."}
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
                   className="admin-input"
+                  style={isLocked ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                 />
                 <button 
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="admin-eye-btn"
+                  disabled={isLocked}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              <p className="admin-hint">Gunakan password: <strong>admin</strong> atau <strong>ldp2026</strong></p>
+              
+              <div style={{
+                marginTop: '10px',
+                padding: '9px 12px',
+                borderRadius: '8px',
+                background: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '0.78rem',
+                color: '#94A3B8'
+              }}>
+                <ShieldCheck size={15} style={{ color: '#3B82F6', flexShrink: 0 }} />
+                <span>Enkripsi SHA-256 aktif. Proteksi brute-force otomatis mengunci setelah 5x gagal.</span>
+              </div>
             </div>
 
-            {loginError && (
+            {loginError && !isLocked && (
               <div className="admin-alert-error">
                 <AlertCircle size={16} />
                 <span>{loginError}</span>
               </div>
             )}
 
-            <button type="submit" className="admin-btn-primary full-width">
+            <button 
+              type="submit" 
+              className="admin-btn-primary full-width"
+              disabled={isLocked || isLoggingIn}
+              style={isLocked ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+            >
               <Lock size={16} />
-              <span>Masuk ke Admin Dashboard</span>
+              <span>{isLoggingIn ? "Memverifikasi..." : isLocked ? `Terkunci (${Math.floor(lockoutRemaining / 60)}m ${lockoutRemaining % 60}s)` : "Masuk ke Admin Dashboard"}</span>
             </button>
           </form>
 
@@ -1475,7 +1691,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
 
         {/* Sidebar Actions */}
         <div className="admin-sidebar-bottom">
-          <button onClick={() => setIsAuthenticated(false)} className="admin-btn-logout">
+          <button onClick={handleLogout} className="admin-btn-logout">
             <LogOut size={16} />
             <span>Keluar (Logout)</span>
           </button>
@@ -1996,6 +2212,93 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* KEAMANAN & GANTI PASSWORD ADMIN */}
+            <div className="admin-box" style={{ marginTop: '24px' }}>
+              <div className="admin-box-header">
+                <div>
+                  <h3 className="admin-box-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ShieldCheck size={18} style={{ color: '#3B82F6' }} />
+                    <span>Keamanan Akses & Kata Sandi Admin</span>
+                  </h3>
+                  <p className="admin-box-sub">Ubah kata sandi dashboard admin LDP Consultant. Sandi dienkripsi dengan standar kriptografi SHA-256 + Salt.</p>
+                </div>
+              </div>
+
+              {pwdChangeToast.message && (
+                <div style={{
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  fontSize: '0.86rem',
+                  fontWeight: 600,
+                  background: pwdChangeToast.type === 'success' ? 'rgba(37, 211, 102, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  border: pwdChangeToast.type === 'success' ? '1px solid #25D366' : '1px solid #EF4444',
+                  color: pwdChangeToast.type === 'success' ? '#25D366' : '#EF4444'
+                }}>
+                  {pwdChangeToast.type === 'success' ? <Check size={18} /> : <AlertCircle size={18} />}
+                  <span>{pwdChangeToast.message}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleChangePasswordSubmit} style={{ maxWidth: '540px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="admin-form-group">
+                  <label className="admin-label">Password Saat Ini</label>
+                  <input 
+                    type="password"
+                    required
+                    placeholder="Masukkan password saat ini..."
+                    value={pwdChangeForm.current}
+                    onChange={(e) => setPwdChangeForm({ ...pwdChangeForm, current: e.target.value })}
+                    className="admin-input"
+                  />
+                </div>
+
+                <div className="admin-form-group">
+                  <label className="admin-label">Password Baru (Minimal 8 karakter)</label>
+                  <input 
+                    type="password"
+                    required
+                    placeholder="Kombinasi huruf besar, kecil, angka, dan simbol..."
+                    value={pwdChangeForm.newPwd}
+                    onChange={(e) => setPwdChangeForm({ ...pwdChangeForm, newPwd: e.target.value })}
+                    className="admin-input"
+                  />
+                </div>
+
+                <div className="admin-form-group">
+                  <label className="admin-label">Konfirmasi Password Baru</label>
+                  <input 
+                    type="password"
+                    required
+                    placeholder="Ketik ulang password baru..."
+                    value={pwdChangeForm.confirm}
+                    onChange={(e) => setPwdChangeForm({ ...pwdChangeForm, confirm: e.target.value })}
+                    className="admin-input"
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginTop: '8px' }}>
+                  <button type="submit" className="admin-btn-primary" disabled={isChangingPwd}>
+                    <Lock size={15} />
+                    <span>{isChangingPwd ? "Menyimpan..." : "Simpan Password Baru"}</span>
+                  </button>
+
+                  <button 
+                    type="button" 
+                    onClick={handleResetDefaultPassword}
+                    className="admin-btn-secondary"
+                    title="Reset ke password sistem bawaan"
+                  >
+                    <RotateCcw size={14} />
+                    <span>Reset Default</span>
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
