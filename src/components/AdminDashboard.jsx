@@ -45,7 +45,13 @@ import {
   Folder,
   Database,
   Key,
-  ShieldAlert
+  ShieldAlert,
+  UserCheck,
+  UserPlus,
+  UserX,
+  KeyRound,
+  Shield,
+  Copy
 } from 'lucide-react';
 import { INITIAL_BLOG_ARTICLES, getStoredArticles } from './BlogPage';
 import { 
@@ -69,6 +75,9 @@ import {
   syncProjectsToSupabase,
   fetchSiteSettingsFromSupabase,
   syncSiteSettingsToSupabase,
+  fetchAdminUsersFromSupabase,
+  syncAdminUsersToSupabase,
+  deleteAdminUserFromSupabase,
   isSupabaseConfigured
 } from '../lib/supabaseClient';
 import {
@@ -77,6 +86,48 @@ import {
   STORAGE_KEYS,
   SYNC_EVENTS
 } from '../utils/syncManager';
+
+// ==========================================
+// DEFAULT USERS & ROLES (RBAC)
+// ==========================================
+export const DEFAULT_ADMIN_USERS = [
+  {
+    id: 1,
+    username: 'admin',
+    fullName: 'Administrator LDP',
+    role: 'super_admin',
+    passwordHash: '13147744cdcbe6901a917ee6e6992fee86d732afe4884af9d1665a9f55b782de', // default master: LDP@2026#Consultant
+    titlePosition: 'System & Engineering Director',
+    avatar: '/images/avatar_ade.jpg',
+    isActive: true,
+    createdAt: '2026-10-01'
+  },
+  {
+    id: 2,
+    username: 'penulis',
+    fullName: 'Tito Riyanto, S.T.',
+    role: 'author',
+    passwordHash: '766a1ac91dc2c3a86c8f2d826ae02f75de2d7c66f3d23dab797b21c314a37d91', // default: penulis123
+    titlePosition: 'Engineering Director / Lead Author',
+    avatar: '/images/avatar_rizky.jpg',
+    isActive: true,
+    createdAt: '2026-10-10'
+  }
+];
+
+export const getStoredAdminUsers = () => {
+  if (typeof window === 'undefined') return DEFAULT_ADMIN_USERS;
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.USERS);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.error("Error reading users from storage:", e);
+  }
+  return DEFAULT_ADMIN_USERS;
+};
 
 // ==========================================
 // SECURITY & CRYPTOGRAPHY (SHA-256 ENCRYPTED)
@@ -464,6 +515,17 @@ export const saveSiteSettingsToStorage = (settings) => {
 export default function AdminDashboard({ onClose, onReturnToSite }) {
   // Authentication & Security State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem('ldp_admin_session');
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p.auth && p.user && p.expiresAt > Date.now()) return p.user;
+      }
+    } catch (e) {}
+    return null;
+  });
+  const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -471,6 +533,29 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
   const [isLocked, setIsLocked] = useState(false);
   const [lockoutRemaining, setLockoutRemaining] = useState(0);
   const [failedAttempts, setFailedAttempts] = useState(0);
+
+  // User Management State (RBAC Multi-User)
+  const [usersList, setUsersList] = useState(getStoredAdminUsers);
+  const [userModalOpen, setUserModalOpen] = useState(false);
+  const [editingUserId, setEditingUserId] = useState(null);
+  const [userFormData, setUserFormData] = useState({
+    fullName: '',
+    username: '',
+    role: 'author',
+    password: '',
+    titlePosition: 'Consultant Engineer & Technical Writer',
+    avatar: '/images/avatar_ade.jpg',
+    isActive: true
+  });
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [userStatusFilter, setUserStatusFilter] = useState('all');
+  const [userToast, setUserToast] = useState('');
+  const [isSyncingUsers, setIsSyncingUsers] = useState(false);
+  const [pwdResetModalOpen, setPwdResetModalOpen] = useState(false);
+  const [resetPwdTargetUser, setResetPwdTargetUser] = useState(null);
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [showResetNewPassword, setShowResetNewPassword] = useState(false);
 
   // Change Password State (in Settings tab)
   const [pwdChangeForm, setPwdChangeForm] = useState({ current: '', newPwd: '', confirm: '' });
@@ -486,12 +571,20 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
         const parsed = JSON.parse(rawSession);
         if (parsed.auth && parsed.expiresAt > Date.now()) {
           setIsAuthenticated(true);
+          if (parsed.user) {
+            setCurrentUser(parsed.user);
+            if (parsed.user.role === 'author') {
+              setActiveTab('articles');
+            }
+          }
         } else {
           sessionStorage.removeItem('ldp_admin_session');
+          setCurrentUser(null);
         }
       }
     } catch (e) {
       sessionStorage.removeItem('ldp_admin_session');
+      setCurrentUser(null);
     }
 
     // 2. Lockout check
@@ -514,11 +607,39 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
 
     checkLockStatus();
     const interval = setInterval(checkLockStatus, 1000);
-    return () => clearInterval(interval);
+
+    // 3. Sync users from storage / BroadcastChannel
+    const unsubUsers = subscribeToSync(SYNC_EVENTS.USERS, (updatedUsers) => {
+      if (updatedUsers && Array.isArray(updatedUsers) && updatedUsers.length > 0) {
+        setUsersList(updatedUsers);
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      unsubUsers();
+    };
   }, []);
 
   // Dashboard Tabs & Filter States
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'leads', 'projects', 'calculator', 'settings', 'whatsapp'
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem('ldp_admin_session');
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p.user && p.user.role === 'author') return 'articles';
+      }
+    } catch (e) {}
+    return 'overview';
+  });
+
+  // Guard: if logged in as author, prevent switching to non-article tabs
+  useEffect(() => {
+    if (currentUser?.role === 'author' && activeTab !== 'articles') {
+      setActiveTab('articles');
+    }
+  }, [currentUser, activeTab]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedLead, setSelectedLead] = useState(null);
@@ -854,6 +975,14 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
               saveSiteSettingsToStorage(cloudSettings);
             }
           });
+          fetchAdminUsersFromSupabase().then(cloudUsers => {
+            if (cloudUsers && cloudUsers.length > 0) {
+              setUsersList(cloudUsers);
+              try {
+                localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(cloudUsers));
+              } catch (e) {}
+            }
+          });
         }
       });
     }
@@ -891,7 +1020,8 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
       await syncWhatsAppContactsToSupabase(waContacts);
       await syncProjectsToSupabase(projectsList);
       await syncSiteSettingsToSupabase(siteSettings);
-      setArticleToast(`Berhasil menyinkronkan seluruh data (${successCount} artikel, ${teamMembers.length} dewan direksi, ${waContacts.length} kontak WA, ${projectsList.length} proyek) ke Cloud Supabase!`);
+      await syncAdminUsersToSupabase(usersList);
+      setArticleToast(`Berhasil menyinkronkan seluruh data (${successCount} artikel, ${teamMembers.length} dewan direksi, ${waContacts.length} kontak WA, ${projectsList.length} proyek, ${usersList.length} pengguna) ke Cloud Supabase!`);
     } catch (e) {
       setArticleToast(`Sinkronisasi sebagian berhasil (${successCount} artikel).`);
     } finally {
@@ -940,6 +1070,23 @@ ALTER TABLE public.consultations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Anyone can submit consultation inquiry" ON public.consultations FOR INSERT WITH CHECK (true);
 CREATE POLICY "Dashboard can view consultations" ON public.consultations FOR SELECT USING (true);
 CREATE POLICY "Dashboard can update consultations" ON public.consultations FOR UPDATE USING (true);
+
+-- Table: admin_users (Super Admin & Penulis Artikel)
+CREATE TABLE IF NOT EXISTS public.admin_users (
+    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    full_name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'author',
+    password_hash TEXT NOT NULL,
+    title_position TEXT DEFAULT 'Technical Writer',
+    avatar TEXT DEFAULT '/images/avatar_ade.jpg',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public admin_users viewable for dashboard" ON public.admin_users FOR SELECT USING (true);
+CREATE POLICY "Dashboard can modify admin_users" ON public.admin_users FOR ALL USING (true);
 `;
     navigator.clipboard.writeText(sql);
     setCopiedSql(true);
@@ -968,8 +1115,22 @@ CREATE POLICY "Dashboard can update consultations" ON public.consultations FOR U
 
   const handleOpenNewArticle = () => {
     setEditingArticleId(null);
+    const authorDefaultName = currentUser?.role === 'author' 
+      ? (currentUser.fullName || 'Penulis LDP') 
+      : 'Tito Riyanto, S.T.';
+    const authorDefaultRole = currentUser?.role === 'author'
+      ? (currentUser.titlePosition || 'Consultant Engineer & Technical Writer')
+      : 'Engineering Director';
+    const authorDefaultAvatar = currentUser?.role === 'author'
+      ? (currentUser.avatar || '/images/avatar_rizky.jpg')
+      : '/images/avatar_rizky.jpg';
+
     setArticleFormData({
       ...initialArticleForm,
+      authorName: authorDefaultName,
+      authorRole: authorDefaultRole,
+      authorAvatar: authorDefaultAvatar,
+      isCustomAuthor: currentUser?.role === 'author',
       publishedAt: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
       views: Math.floor(Math.random() * 250) + 120,
       content: `### Latar Belakang & Analisis Permasalahan
@@ -1211,32 +1372,87 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
   };
 
 
-  // Secure Login Handler (SHA-256 Verified + Brute-force Protected)
+  // Multi-User Secure Login Handler (SHA-256 Verified + Brute-force Protected)
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     if (isLocked) return;
 
-    const trimmedInput = passwordInput.trim();
-    if (!trimmedInput) return;
+    const trimmedPwd = passwordInput.trim();
+    if (!trimmedPwd) {
+      setLoginError('Password akses wajib diisi!');
+      return;
+    }
 
+    const trimmedUser = usernameInput.trim().toLowerCase();
     setIsLoggingIn(true);
     setLoginError('');
 
     try {
-      const inputHash = await computeAdminHash(trimmedInput);
+      const inputHash = await computeAdminHash(trimmedPwd);
       const storedCustomHash = localStorage.getItem('ldp_admin_pwd_hash');
-      const targetHash = storedCustomHash || DEFAULT_ADMIN_HASH;
+      const targetMasterHash = storedCustomHash || DEFAULT_ADMIN_HASH;
 
-      if (inputHash === targetHash) {
+      // 1. Search for matching user in usersList
+      let matchedUser = usersList.find(u => u.username.toLowerCase() === trimmedUser);
+
+      // 2. If username is empty or 'admin' and password matches master admin hash:
+      if ((!trimmedUser || trimmedUser === 'admin') && inputHash === targetMasterHash) {
+        matchedUser = usersList.find(u => u.username.toLowerCase() === 'admin') || {
+          id: 1,
+          username: 'admin',
+          fullName: 'Administrator LDP',
+          role: 'super_admin',
+          titlePosition: 'System & Engineering Admin',
+          avatar: '/images/avatar_ade.jpg',
+          isActive: true
+        };
+      } else if (matchedUser) {
+        // For specific user, check password
+        const isMaster = matchedUser.username.toLowerCase() === 'admin';
+        const validHash = isMaster 
+          ? (matchedUser.passwordHash === inputHash || targetMasterHash === inputHash)
+          : (matchedUser.passwordHash === inputHash);
+
+        if (!validHash) {
+          matchedUser = null;
+        }
+      }
+
+      if (matchedUser) {
+        if (!matchedUser.isActive) {
+          setLoginError('Akses ditolak! Akun ini telah dinonaktifkan oleh Administrator.');
+          setIsLoggingIn(false);
+          return;
+        }
+
         // Login Berhasil
         localStorage.removeItem('ldp_admin_failed_count');
         localStorage.removeItem('ldp_admin_lockout_until');
+
+        const sessionUser = {
+          id: matchedUser.id,
+          username: matchedUser.username,
+          fullName: matchedUser.fullName,
+          role: matchedUser.role, // 'super_admin' or 'author'
+          titlePosition: matchedUser.titlePosition,
+          avatar: matchedUser.avatar
+        };
+
         sessionStorage.setItem('ldp_admin_session', JSON.stringify({
           auth: true,
+          user: sessionUser,
           loginTime: Date.now(),
           expiresAt: Date.now() + 2 * 60 * 60 * 1000 // 2 Jam sesi aktif
         }));
+
+        setCurrentUser(sessionUser);
         setIsAuthenticated(true);
+        if (sessionUser.role === 'author') {
+          setActiveTab('articles');
+        } else {
+          setActiveTab('overview');
+        }
+        setUsernameInput('');
         setPasswordInput('');
         setLoginError('');
         setFailedAttempts(0);
@@ -1254,7 +1470,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
           setLoginError('Akses ditolak! Terlalu banyak percobaan salah. Portal dikunci selama 15 menit untuk mencegah peretasan.');
         } else {
           const remaining = MAX_LOGIN_ATTEMPTS - currentFailed;
-          setLoginError(`Password salah! Sisa percobaan: ${remaining} kali sebelum sistem otomatis terkunci.`);
+          setLoginError(`Username atau password salah! Sisa percobaan: ${remaining} kali sebelum sistem otomatis terkunci.`);
         }
       }
     } catch (err) {
@@ -1269,9 +1485,232 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
   const handleLogout = () => {
     sessionStorage.removeItem('ldp_admin_session');
     setIsAuthenticated(false);
+    setCurrentUser(null);
+    setUsernameInput('');
     setPasswordInput('');
     setLoginError('');
   };
+
+  // User Management Handlers (RBAC Multi-User)
+  const saveUsersToStorage = (updatedUsers, toastMsg = '') => {
+    setUsersList(updatedUsers);
+    try {
+      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(updatedUsers));
+      broadcastSync(SYNC_EVENTS.USERS, updatedUsers);
+    } catch (e) {
+      console.error("Failed to save users:", e);
+    }
+    if (isSupabaseConfigured()) {
+      syncAdminUsersToSupabase(updatedUsers).catch(err => console.warn("Supabase user sync error:", err));
+    }
+    if (toastMsg) {
+      setUserToast(toastMsg);
+      setTimeout(() => setUserToast(''), 4000);
+    }
+  };
+
+  const handleOpenNewUser = () => {
+    setEditingUserId(null);
+    setUserFormData({
+      fullName: '',
+      username: '',
+      role: 'author',
+      password: '',
+      titlePosition: 'Consultant Engineer & Technical Writer',
+      avatar: '/images/avatar_ade.jpg',
+      isActive: true
+    });
+    setUserModalOpen(true);
+  };
+
+  const handleOpenEditUser = (u) => {
+    setEditingUserId(u.id);
+    setUserFormData({
+      fullName: u.fullName,
+      username: u.username,
+      role: u.role,
+      password: '',
+      titlePosition: u.titlePosition || 'Consultant Engineer',
+      avatar: u.avatar || '/images/avatar_ade.jpg',
+      isActive: u.isActive !== false
+    });
+    setUserModalOpen(true);
+  };
+
+  const handleSaveUserSubmit = async (e) => {
+    e.preventDefault();
+    const cleanFull = userFormData.fullName.trim();
+    const cleanUser = userFormData.username.trim().toLowerCase();
+
+    if (!cleanFull) {
+      alert("Nama lengkap pengguna wajib diisi!");
+      return;
+    }
+    if (!cleanUser || cleanUser.length < 3) {
+      alert("Username minimal harus 3 karakter huruf / angka!");
+      return;
+    }
+    if (!/^[a-z0-9_.-]+$/.test(cleanUser)) {
+      alert("Username hanya boleh berisi huruf kecil, angka, garis bawah (_), atau titik (.)!");
+      return;
+    }
+
+    // Check duplicate username
+    const duplicate = usersList.find(u => u.username.toLowerCase() === cleanUser && u.id !== editingUserId);
+    if (duplicate) {
+      alert(`Username "${cleanUser}" sudah digunakan oleh pengguna lain! Silakan pilih username yang berbeda.`);
+      return;
+    }
+
+    if (!editingUserId) {
+      // New user: password required
+      if (!userFormData.password || userFormData.password.length < 6) {
+        alert("Password baru untuk pengguna minimal 6 karakter!");
+        return;
+      }
+      const hashed = await computeAdminHash(userFormData.password.trim());
+      const newUser = {
+        id: Date.now(),
+        fullName: cleanFull,
+        username: cleanUser,
+        role: userFormData.role,
+        passwordHash: hashed,
+        titlePosition: userFormData.titlePosition.trim() || (userFormData.role === 'author' ? 'Technical Writer' : 'System Admin'),
+        avatar: userFormData.avatar || '/images/avatar_ade.jpg',
+        isActive: userFormData.isActive,
+        createdAt: new Date().toISOString().split('T')[0]
+      };
+      const updated = [...usersList, newUser];
+      saveUsersToStorage(updated, `Akun baru "${newUser.fullName}" (@${newUser.username}) dengan role ${newUser.role === 'author' ? 'Penulis' : 'Super Admin'} berhasil ditambahkan!`);
+    } else {
+      // Edit user
+      const existing = usersList.find(u => u.id === editingUserId);
+      if (!existing) return;
+      let finalHash = existing.passwordHash;
+      if (userFormData.password && userFormData.password.trim()) {
+        if (userFormData.password.trim().length < 6) {
+          alert("Password baru minimal 6 karakter!");
+          return;
+        }
+        finalHash = await computeAdminHash(userFormData.password.trim());
+      }
+      const updatedUser = {
+        ...existing,
+        fullName: cleanFull,
+        username: cleanUser,
+        role: userFormData.role,
+        passwordHash: finalHash,
+        titlePosition: userFormData.titlePosition.trim() || existing.titlePosition,
+        avatar: userFormData.avatar || existing.avatar,
+        isActive: userFormData.isActive
+      };
+      const updated = usersList.map(u => u.id === editingUserId ? updatedUser : u);
+      saveUsersToStorage(updated, `Data pengguna "${updatedUser.fullName}" berhasil diperbarui!`);
+
+      // If updating current user's profile, update currentUser session
+      if (currentUser && currentUser.id === editingUserId) {
+        const newSessionUser = {
+          ...currentUser,
+          fullName: updatedUser.fullName,
+          username: updatedUser.username,
+          role: updatedUser.role,
+          titlePosition: updatedUser.titlePosition,
+          avatar: updatedUser.avatar
+        };
+        setCurrentUser(newSessionUser);
+        const currentRaw = sessionStorage.getItem('ldp_admin_session');
+        if (currentRaw) {
+          try {
+            const p = JSON.parse(currentRaw);
+            p.user = newSessionUser;
+            sessionStorage.setItem('ldp_admin_session', JSON.stringify(p));
+          } catch (e) {}
+        }
+      }
+    }
+    setUserModalOpen(false);
+  };
+
+  const handleToggleUserActive = (u) => {
+    if (u.username === 'admin') {
+      alert("Akun Administrator Utama tidak boleh dinonaktifkan!");
+      return;
+    }
+    if (currentUser && currentUser.id === u.id) {
+      alert("Anda tidak dapat menonaktifkan akun Anda sendiri yang sedang aktif!");
+      return;
+    }
+    const newStatus = !u.isActive;
+    const updated = usersList.map(item => item.id === u.id ? { ...item, isActive: newStatus } : item);
+    saveUsersToStorage(updated, `Status akun "${u.fullName}" diubah menjadi ${newStatus ? 'Aktif' : 'Nonaktif'}.`);
+  };
+
+  const handleDeleteUser = (u) => {
+    if (u.username === 'admin') {
+      alert("Akun Administrator Utama tidak dapat dihapus demi keamanan!");
+      return;
+    }
+    if (currentUser && currentUser.id === u.id) {
+      alert("Anda tidak dapat menghapus akun Anda sendiri!");
+      return;
+    }
+    if (window.confirm(`Hapus akun pengguna "${u.fullName}" (@${u.username})? Tindakan ini tidak dapat dibatalkan.`)) {
+      const updated = usersList.filter(item => item.id !== u.id);
+      saveUsersToStorage(updated, `Pengguna "${u.fullName}" berhasil dihapus dari sistem!`);
+      if (isSupabaseConfigured()) {
+        deleteAdminUserFromSupabase(u.username);
+      }
+    }
+  };
+
+  const handleOpenResetUserPassword = (u) => {
+    setResetPwdTargetUser(u);
+    setResetNewPassword('');
+    setShowResetNewPassword(false);
+    setPwdResetModalOpen(true);
+  };
+
+  const handleSaveResetUserPasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!resetPwdTargetUser) return;
+    if (!resetNewPassword || resetNewPassword.trim().length < 6) {
+      alert("Password baru minimal harus 6 karakter!");
+      return;
+    }
+    const newHash = await computeAdminHash(resetNewPassword.trim());
+    const updated = usersList.map(item => item.id === resetPwdTargetUser.id ? { ...item, passwordHash: newHash } : item);
+    saveUsersToStorage(updated, `Password untuk pengguna "${resetPwdTargetUser.fullName}" (@${resetPwdTargetUser.username}) berhasil diperbarui!`);
+    
+    // If master admin password reset
+    if (resetPwdTargetUser.username === 'admin') {
+      localStorage.setItem('ldp_admin_pwd_hash', newHash);
+    }
+    setPwdResetModalOpen(false);
+    setResetPwdTargetUser(null);
+    setResetNewPassword('');
+  };
+
+  const handleSyncUsersToSupabaseNow = async () => {
+    if (!isSupabaseConfigured()) {
+      alert("Supabase belum terkonfigurasi. Buka tab Database & Supabase untuk memasukkan URL & Key.");
+      return;
+    }
+    setIsSyncingUsers(true);
+    try {
+      const res = await syncAdminUsersToSupabase(usersList);
+      if (res.success) {
+        setUserToast(`Berhasil menyinkronkan ${usersList.length} akun pengguna ke Cloud Supabase!`);
+      } else {
+        alert("Gagal sinkronisasi: " + (res.error || res.message));
+      }
+    } catch (err) {
+      alert("Kendala sinkronisasi: " + err.message);
+    } finally {
+      setIsSyncingUsers(false);
+      setTimeout(() => setUserToast(''), 4000);
+    }
+  };
+
 
   // Change Password Handler (SHA-256 Encrypted)
   const handleChangePasswordSubmit = async (e) => {
@@ -1503,17 +1942,37 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
 
           <form onSubmit={handleLoginSubmit} className="admin-login-form">
             <div className="admin-form-group">
-              <label className="admin-label">Password Akses Admin</label>
+              <label className="admin-label">Username / ID Pengguna</label>
+              <div className="admin-input-wrapper">
+                <input 
+                  type="text" 
+                  disabled={isLocked || isLoggingIn}
+                  placeholder="Contoh: admin atau penulis..."
+                  value={usernameInput}
+                  onChange={(e) => setUsernameInput(e.target.value)}
+                  className="admin-input"
+                  autoComplete="username"
+                  autoFocus
+                />
+              </div>
+              <div className="admin-hint" style={{ fontSize: '0.73rem', color: '#94A3B8', marginTop: '4px' }}>
+                Admin: <strong>admin</strong> | Penulis: <strong>penulis</strong> (atau username yang terdaftar)
+              </div>
+            </div>
+
+            <div className="admin-form-group">
+              <label className="admin-label">Kata Sandi (Password)</label>
               <div className="admin-input-wrapper">
                 <input 
                   type={showPassword ? "text" : "password"}
                   required
                   disabled={isLocked || isLoggingIn}
-                  placeholder={isLocked ? "Sistem sedang dikunci..." : "Masukkan password admin..."}
+                  placeholder={isLocked ? "Sistem sedang dikunci..." : "Masukkan kata sandi..."}
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
                   className="admin-input"
                   style={isLocked ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                  autoComplete="current-password"
                 />
                 <button 
                   type="button"
@@ -1538,7 +1997,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 color: '#94A3B8'
               }}>
                 <ShieldCheck size={15} style={{ color: '#3B82F6', flexShrink: 0 }} />
-                <span>Enkripsi SHA-256 aktif. Proteksi brute-force otomatis mengunci setelah 5x gagal.</span>
+                <span>Multi-User RBAC aktif. Proteksi brute-force otomatis mengunci setelah 5x gagal.</span>
               </div>
             </div>
 
@@ -1589,80 +2048,85 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
 
           {/* Navigation Links */}
           <nav className="admin-nav-list">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`admin-nav-item ${activeTab === 'overview' ? 'active' : ''}`}
-            >
-              <div className="admin-nav-left">
-                <BarChart3 size={18} />
-                <span>Ringkasan Analytics</span>
-              </div>
-            </button>
+            {currentUser?.role !== 'author' && (
+              <>
+                <button
+                  onClick={() => setActiveTab('overview')}
+                  className={`admin-nav-item ${activeTab === 'overview' ? 'active' : ''}`}
+                >
+                  <div className="admin-nav-left">
+                    <BarChart3 size={18} />
+                    <span>Ringkasan Analytics</span>
+                  </div>
+                </button>
 
-            <button
-              onClick={() => setActiveTab('leads')}
-              className={`admin-nav-item ${activeTab === 'leads' ? 'active' : ''}`}
-            >
-              <div className="admin-nav-left">
-                <FileText size={18} />
-                <span>Konsultasi Masuk</span>
-              </div>
-              <span className="admin-count-pill">{leads.length}</span>
-            </button>
+                <button
+                  onClick={() => setActiveTab('leads')}
+                  className={`admin-nav-item ${activeTab === 'leads' ? 'active' : ''}`}
+                >
+                  <div className="admin-nav-left">
+                    <FileText size={18} />
+                    <span>Konsultasi Masuk</span>
+                  </div>
+                  <span className="admin-count-pill">{leads.length}</span>
+                </button>
 
-            <button
-              onClick={() => setActiveTab('projects')}
-              className={`admin-nav-item ${activeTab === 'projects' ? 'active' : ''}`}
-            >
-              <div className="admin-nav-left">
-                <Building2 size={18} />
-                <span>Portofolio Proyek</span>
-              </div>
-              <span className="admin-count-pill blue">{projectsList.length}</span>
-            </button>
+                <button
+                  onClick={() => setActiveTab('projects')}
+                  className={`admin-nav-item ${activeTab === 'projects' ? 'active' : ''}`}
+                >
+                  <div className="admin-nav-left">
+                    <Building2 size={18} />
+                    <span>Portofolio Proyek</span>
+                  </div>
+                  <span className="admin-count-pill blue">{projectsList.length}</span>
+                </button>
 
-            <button
-              onClick={() => setActiveTab('calculator')}
-              className={`admin-nav-item ${activeTab === 'calculator' ? 'active' : ''}`}
-            >
-              <div className="admin-nav-left">
-                <Calculator size={18} />
-                <span>Log Kalkulator HVAC</span>
-              </div>
-            </button>
+                <button
+                  onClick={() => setActiveTab('calculator')}
+                  className={`admin-nav-item ${activeTab === 'calculator' ? 'active' : ''}`}
+                >
+                  <div className="admin-nav-left">
+                    <Calculator size={18} />
+                    <span>Log Kalkulator HVAC</span>
+                  </div>
+                </button>
 
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`admin-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-            >
-              <div className="admin-nav-left">
-                <ShieldCheck size={18} />
-                <span>Pengaturan Legalitas</span>
-              </div>
-            </button>
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  className={`admin-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+                >
+                  <div className="admin-nav-left">
+                    <ShieldCheck size={18} />
+                    <span>Pengaturan Legalitas</span>
+                  </div>
+                </button>
 
-            <button
-              onClick={() => setActiveTab('whatsapp')}
-              className={`admin-nav-item ${activeTab === 'whatsapp' ? 'active' : ''}`}
-            >
-              <div className="admin-nav-left">
-                <MessageSquare size={18} />
-                <span>Pengaturan WhatsApp</span>
-              </div>
-              <span className="admin-count-pill green">{waContacts.filter(c => c.active !== false).length}</span>
-            </button>
+                <button
+                  onClick={() => setActiveTab('whatsapp')}
+                  className={`admin-nav-item ${activeTab === 'whatsapp' ? 'active' : ''}`}
+                >
+                  <div className="admin-nav-left">
+                    <MessageSquare size={18} />
+                    <span>Pengaturan WhatsApp</span>
+                  </div>
+                  <span className="admin-count-pill green">{waContacts.filter(c => c.active !== false).length}</span>
+                </button>
 
-            <button
-              onClick={() => setActiveTab('team')}
-              className={`admin-nav-item ${activeTab === 'team' ? 'active' : ''}`}
-            >
-              <div className="admin-nav-left">
-                <Users size={18} />
-                <span>Jajaran Direksi & Tim</span>
-              </div>
-              <span className="admin-count-pill blue">{teamMembers.length}</span>
-            </button>
+                <button
+                  onClick={() => setActiveTab('team')}
+                  className={`admin-nav-item ${activeTab === 'team' ? 'active' : ''}`}
+                >
+                  <div className="admin-nav-left">
+                    <Users size={18} />
+                    <span>Jajaran Direksi & Tim</span>
+                  </div>
+                  <span className="admin-count-pill blue">{teamMembers.length}</span>
+                </button>
+              </>
+            )}
 
+            {/* KELOLA ARTIKEL & BLOG (ACCESSIBLE TO BOTH SUPER ADMIN & AUTHORS) */}
             <button
               onClick={() => setActiveTab('articles')}
               className={`admin-nav-item ${activeTab === 'articles' ? 'active' : ''}`}
@@ -1674,18 +2138,53 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
               <span className="admin-count-pill orange">{articles.length}</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab('database')}
-              className={`admin-nav-item ${activeTab === 'database' ? 'active' : ''}`}
-            >
-              <div className="admin-nav-left">
-                <Database size={18} />
-                <span>Database & Supabase</span>
+            {currentUser?.role !== 'author' && (
+              <>
+                {/* USER MANAGEMENT (SUPER ADMIN ONLY) */}
+                <button
+                  onClick={() => setActiveTab('users')}
+                  className={`admin-nav-item ${activeTab === 'users' ? 'active' : ''}`}
+                >
+                  <div className="admin-nav-left">
+                    <UserCheck size={18} />
+                    <span>Manajemen Pengguna</span>
+                  </div>
+                  <span className="admin-count-pill blue">{usersList.length}</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('database')}
+                  className={`admin-nav-item ${activeTab === 'database' ? 'active' : ''}`}
+                >
+                  <div className="admin-nav-left">
+                    <Database size={18} />
+                    <span>Database & Supabase</span>
+                  </div>
+                  <span className={`admin-count-pill ${supabaseConfig.isConfigured ? 'green' : 'orange'}`}>
+                    {supabaseConfig.isConfigured ? 'CLOUD' : 'LOCAL'}
+                  </span>
+                </button>
+              </>
+            )}
+
+            {/* AUTHOR MODE BADGE NOTICE IN SIDEBAR */}
+            {currentUser?.role === 'author' && (
+              <div style={{
+                margin: '18px 12px 10px',
+                padding: '12px 14px',
+                borderRadius: '12px',
+                background: 'rgba(255, 102, 0, 0.08)',
+                border: '1px solid rgba(255, 102, 0, 0.25)',
+                fontSize: '0.73rem',
+                color: '#CBD5E1',
+                lineHeight: 1.5
+              }}>
+                <div style={{ fontWeight: 700, color: '#FF8800', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                  <Shield size={14} /> Mode Akses Penulis
+                </div>
+                Anda login dengan hak akses khusus menulis & mengelola artikel publikasi website.
               </div>
-              <span className={`admin-count-pill ${supabaseConfig.isConfigured ? 'green' : 'orange'}`}>
-                {supabaseConfig.isConfigured ? 'CLOUD' : 'LOCAL'}
-              </span>
-            </button>
+            )}
           </nav>
         </div>
 
@@ -1718,13 +2217,18 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
               {activeTab === 'whatsapp' && 'Kelola Nomor & Widget WhatsApp'}
               {activeTab === 'team' && 'Manajemen Jajaran Direksi & Dewan Pakar'}
               {activeTab === 'articles' && 'Manajemen Publikasi Artikel & Blog'}
+              {activeTab === 'users' && 'Manajemen Akun Pengguna & Hak Akses (RBAC)'}
               {activeTab === 'database' && 'Konfigurasi & Sinkronisasi Database Supabase'}
             </h1>
             <p className="admin-header-desc">
-              {activeTab === 'team'
+              {currentUser?.role === 'author'
+                ? 'PT LENTANG Duta Perkasa — Tulis, edit, pratinjau, dan publikasikan artikel wawasan teknik MEP HVAC langsung ke website.'
+                : activeTab === 'team'
                 ? 'PT LENTANG Duta Perkasa — Atur data pimpinan, gelar teknik, peran eksekutif, foto/avatar inisial, dan kredensial rekayasa.'
                 : activeTab === 'articles' 
                 ? 'PT LENTANG Duta Perkasa — Tulis, edit, dan publikasikan wawasan teknik & jurnal MEP HVAC.'
+                : activeTab === 'users'
+                ? 'PT LENTANG Duta Perkasa — Kelola akun login administrator dan kontributor/penulis artikel teknik.'
                 : 'PT LENTANG Duta Perkasa — Sistem Manajemen Internal Konsultan Teknik MEP & HVAC.'}
             </p>
           </div>
@@ -1734,7 +2238,32 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
               <span className="admin-pulse-dot"></span>
               <span>SYSTEM ONLINE</span>
             </div>
-            <div className="admin-user-avatar">AD</div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#FFFFFF', lineHeight: 1.2 }}>
+                  {currentUser?.fullName || (currentUser?.role === 'author' ? 'Penulis Artikel' : 'Administrator')}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end', marginTop: '3px' }}>
+                  <span className={`admin-role-badge ${currentUser?.role === 'author' ? 'author' : 'super_admin'}`}>
+                    {currentUser?.role === 'author' ? '✍️ Penulis' : '🛡️ Super Admin'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="admin-user-avatar" style={{ overflow: 'hidden', padding: 0 }}>
+                {currentUser?.avatar ? (
+                  <img 
+                    src={currentUser.avatar} 
+                    alt={currentUser.fullName} 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                ) : (
+                  (currentUser?.fullName || 'AD').substring(0, 2).toUpperCase()
+                )}
+              </div>
+            </div>
           </div>
         </header>
 
@@ -3400,6 +3929,364 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 </div>
               </div>
 
+            </div>
+
+          </div>
+        )}
+
+        {/* TAB 9: USER MANAGEMENT (activeTab === 'users' && currentUser?.role !== 'author') */}
+        {activeTab === 'users' && currentUser?.role !== 'author' && (
+          <div className="admin-tab-content space-y">
+            
+            {/* TOAST ALERT */}
+            {userToast && (
+              <div className="admin-toast-success" style={{
+                background: 'rgba(59, 130, 246, 0.15)',
+                border: '1px solid #3B82F6',
+                color: '#60A5FA',
+                padding: '12px 18px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '0.88rem',
+                fontWeight: 600,
+                marginBottom: '16px'
+              }}>
+                <Check size={18} />
+                <span>{userToast}</span>
+              </div>
+            )}
+
+            {/* STAT CARDS ROW FOR USERS */}
+            <div className="admin-stats-grid">
+              
+              <div className="admin-stat-card">
+                <div className="admin-stat-card-header">
+                  <span className="admin-stat-label">Total Pengguna</span>
+                  <div className="admin-stat-icon-wrap blue">
+                    <Users size={18} />
+                  </div>
+                </div>
+                <div className="admin-stat-val-row">
+                  <span className="admin-stat-value">{usersList.length}</span>
+                  <span className="admin-stat-badge blue">Akun Terdaftar</span>
+                </div>
+                <p className="admin-stat-sub">Semua pengguna portal admin</p>
+              </div>
+
+              <div className="admin-stat-card">
+                <div className="admin-stat-card-header">
+                  <span className="admin-stat-label">Super Administrator</span>
+                  <div className="admin-stat-icon-wrap purple">
+                    <Shield size={18} />
+                  </div>
+                </div>
+                <div className="admin-stat-val-row">
+                  <span className="admin-stat-value">
+                    {usersList.filter(u => u.role === 'super_admin').length}
+                  </span>
+                  <span className="admin-stat-badge purple">Full Akses</span>
+                </div>
+                <p className="admin-stat-sub">Akses seluruh menu & database</p>
+              </div>
+
+              <div className="admin-stat-card">
+                <div className="admin-stat-card-header">
+                  <span className="admin-stat-label">Penulis Artikel</span>
+                  <div className="admin-stat-icon-wrap orange">
+                    <BookOpen size={18} />
+                  </div>
+                </div>
+                <div className="admin-stat-val-row">
+                  <span className="admin-stat-value">
+                    {usersList.filter(u => u.role === 'author').length}
+                  </span>
+                  <span className="admin-stat-badge amber">Khusus Blog</span>
+                </div>
+                <p className="admin-stat-sub">Akses posting & edit artikel</p>
+              </div>
+
+              <div className="admin-stat-card">
+                <div className="admin-stat-card-header">
+                  <span className="admin-stat-label">Pengguna Aktif</span>
+                  <div className="admin-stat-icon-wrap green">
+                    <UserCheck size={18} />
+                  </div>
+                </div>
+                <div className="admin-stat-val-row">
+                  <span className="admin-stat-value">
+                    {usersList.filter(u => u.isActive !== false).length}
+                  </span>
+                  <span className="admin-stat-badge green">Diizinkan</span>
+                </div>
+                <p className="admin-stat-sub">Bisa login ke portal admin</p>
+              </div>
+
+            </div>
+
+            {/* TOP BAR ACTIONS */}
+            <div className="admin-box-top-actions">
+              <div>
+                <h3 className="admin-box-title">Daftar Akun Pengguna & Hak Akses Portal</h3>
+                <p className="admin-box-sub">Buat akun untuk tim penulis atau rekan direksi. Penulis hanya bisa membuka menu artikel & blog demi menjaga privasi data klien.</p>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                {isSupabaseConfigured() && (
+                  <button 
+                    onClick={handleSyncUsersToSupabaseNow} 
+                    className="admin-btn-secondary"
+                    disabled={isSyncingUsers}
+                    title="Kirim dan sinkronkan daftar akun ini ke Cloud Supabase"
+                  >
+                    <Database size={15} />
+                    <span>{isSyncingUsers ? "Menyinkronkan..." : "Sinkron ke Supabase"}</span>
+                  </button>
+                )}
+                <button onClick={handleOpenNewUser} className="admin-btn-primary">
+                  <UserPlus size={16} />
+                  <span>Tambah Pengguna Baru</span>
+                </button>
+              </div>
+            </div>
+
+            {/* FILTER & SEARCH ROW */}
+            <div className="admin-filter-bar">
+              <div className="admin-search-wrap" style={{ flex: 1, minWidth: '280px', maxWidth: 'none' }}>
+                <Search size={16} className="admin-search-icon" />
+                <input 
+                  type="text" 
+                  placeholder="Cari nama pengguna, username (@id), atau spesialisasi jabatan..." 
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="admin-search-input"
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <div className="admin-filter-select-wrap">
+                  <Filter size={16} className="admin-filter-icon" />
+                  <select
+                    value={userRoleFilter}
+                    onChange={(e) => setUserRoleFilter(e.target.value)}
+                    className="admin-select"
+                    style={{ minWidth: '175px' }}
+                  >
+                    <option value="all">Semua Hak Akses</option>
+                    <option value="super_admin">🛡️ Super Admin</option>
+                    <option value="author">✍️ Penulis Artikel</option>
+                  </select>
+                </div>
+
+                <div className="admin-filter-select-wrap">
+                  <UserCheck size={16} className="admin-filter-icon" />
+                  <select
+                    value={userStatusFilter}
+                    onChange={(e) => setUserStatusFilter(e.target.value)}
+                    className="admin-select"
+                    style={{ minWidth: '150px' }}
+                  >
+                    <option value="all">Semua Status</option>
+                    <option value="active">🟢 Aktif</option>
+                    <option value="inactive">⚪ Nonaktif</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* USERS DATA TABLE */}
+            <div className="admin-table-box">
+              <div className="admin-table-scroll">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th style={{ minWidth: '220px' }}>Nama & Profil Pengguna</th>
+                      <th style={{ minWidth: '130px' }}>Username Login</th>
+                      <th style={{ minWidth: '150px' }}>Peran / Hak Akses</th>
+                      <th style={{ minWidth: '180px' }}>Spesialisasi Jabatan</th>
+                      <th style={{ minWidth: '100px', textAlign: 'center' }}>Status</th>
+                      <th style={{ minWidth: '110px' }}>Terdaftar</th>
+                      <th style={{ minWidth: '160px', textAlign: 'right' }}>Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usersList.filter(u => {
+                      const q = userSearch.toLowerCase().trim();
+                      const matchSearch = q === '' ||
+                        u.fullName?.toLowerCase().includes(q) ||
+                        u.username?.toLowerCase().includes(q) ||
+                        u.titlePosition?.toLowerCase().includes(q);
+
+                      const matchRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+                      const matchStatus = userStatusFilter === 'all' ||
+                        (userStatusFilter === 'active' && u.isActive !== false) ||
+                        (userStatusFilter === 'inactive' && u.isActive === false);
+
+                      return matchSearch && matchRole && matchStatus;
+                    }).map((u) => {
+                      const isMasterAdmin = u.username.toLowerCase() === 'admin';
+                      const isSelf = currentUser && currentUser.id === u.id;
+
+                      return (
+                        <tr key={u.id}>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <img 
+                                src={u.avatar || "/images/avatar_ade.jpg"} 
+                                alt={u.fullName} 
+                                style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #1E293B', flexShrink: 0 }}
+                                onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
+                              />
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <strong className="text-white" style={{ fontSize: '0.86rem' }}>{u.fullName}</strong>
+                                  {isSelf && (
+                                    <span style={{ fontSize: '0.65rem', background: 'rgba(59, 130, 246, 0.2)', color: '#60A5FA', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                      Anda
+                                    </span>
+                                  )}
+                                  {isMasterAdmin && (
+                                    <span style={{ fontSize: '0.65rem', background: 'rgba(245, 158, 11, 0.2)', color: '#FCD34D', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                      Master
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '2px' }}>
+                                  ID: #{u.id}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td>
+                            <code style={{ 
+                              background: '#040E1C', 
+                              padding: '3px 8px', 
+                              borderRadius: '6px', 
+                              color: '#38BDF8', 
+                              fontSize: '0.8rem',
+                              border: '1px solid #1E293B'
+                            }}>
+                              @{u.username}
+                            </code>
+                          </td>
+
+                          <td>
+                            <span className={`admin-role-badge ${u.role === 'author' ? 'author' : 'super_admin'}`}>
+                              {u.role === 'author' ? '✍️ Penulis Artikel' : '🛡️ Super Admin'}
+                            </span>
+                          </td>
+
+                          <td>
+                            <span style={{ fontSize: '0.8rem', color: '#CBD5E1' }}>
+                              {u.titlePosition || (u.role === 'author' ? 'Technical Writer' : 'Engineering Admin')}
+                            </span>
+                          </td>
+
+                          <td style={{ textAlign: 'center' }}>
+                            <span className={`admin-status-tag ${u.isActive !== false ? 'green' : 'gray'}`}>
+                              {u.isActive !== false ? '🟢 Aktif' : '⚪ Nonaktif'}
+                            </span>
+                          </td>
+
+                          <td>
+                            <span style={{ fontSize: '0.76rem', color: '#94A3B8' }}>
+                              {u.createdAt || '2026-10-01'}
+                            </span>
+                          </td>
+
+                          <td style={{ textAlign: 'right' }}>
+                            <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                              <button 
+                                onClick={() => handleOpenEditUser(u)} 
+                                className="admin-action-btn edit"
+                                title="Edit Data Pengguna"
+                              >
+                                <Edit size={14} />
+                              </button>
+
+                              <button 
+                                onClick={() => handleOpenResetUserPassword(u)} 
+                                className="admin-action-btn"
+                                style={{ color: '#F59E0B' }}
+                                title="Ganti Password Pengguna Ini"
+                              >
+                                <KeyRound size={14} />
+                              </button>
+
+                              <button 
+                                onClick={() => handleToggleUserActive(u)} 
+                                className="admin-action-btn"
+                                style={{ color: u.isActive !== false ? '#94A3B8' : '#10B981', opacity: (isMasterAdmin || isSelf) ? 0.35 : 1, cursor: (isMasterAdmin || isSelf) ? 'not-allowed' : 'pointer' }}
+                                title={isMasterAdmin ? 'Master admin tidak bisa dinonaktifkan' : isSelf ? 'Tidak bisa menonaktifkan akun sendiri' : u.isActive !== false ? 'Nonaktifkan Akun' : 'Aktifkan Akun'}
+                                disabled={isMasterAdmin || isSelf}
+                              >
+                                {u.isActive !== false ? <UserX size={14} /> : <UserCheck size={14} />}
+                              </button>
+
+                              <button 
+                                onClick={() => handleDeleteUser(u)} 
+                                className="admin-action-btn delete"
+                                style={{ opacity: (isMasterAdmin || isSelf) ? 0.35 : 1, cursor: (isMasterAdmin || isSelf) ? 'not-allowed' : 'pointer' }}
+                                title={isMasterAdmin ? 'Master admin tidak bisa dihapus' : isSelf ? 'Tidak bisa menghapus akun sendiri' : 'Hapus Pengguna'}
+                                disabled={isMasterAdmin || isSelf}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {usersList.filter(u => {
+                      const q = userSearch.toLowerCase().trim();
+                      const matchSearch = q === '' ||
+                        u.fullName?.toLowerCase().includes(q) ||
+                        u.username?.toLowerCase().includes(q) ||
+                        u.titlePosition?.toLowerCase().includes(q);
+                      const matchRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+                      const matchStatus = userStatusFilter === 'all' ||
+                        (userStatusFilter === 'active' && u.isActive !== false) ||
+                        (userStatusFilter === 'inactive' && u.isActive === false);
+                      return matchSearch && matchRole && matchStatus;
+                    }).length === 0 && (
+                      <tr>
+                        <td colSpan={7} style={{ textAlign: 'center', padding: '36px 16px', color: '#94A3B8' }}>
+                          <AlertCircle size={24} style={{ margin: '0 auto 8px', color: '#F59E0B' }} />
+                          <div>Tidak ditemukan akun pengguna yang cocok dengan pencarian / filter.</div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* INFORMATION BANNER ON RBAC */}
+            <div style={{
+              background: 'rgba(15, 32, 56, 0.6)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '16px',
+              padding: '20px 24px',
+              display: 'flex',
+              gap: '16px',
+              alignItems: 'flex-start'
+            }}>
+              <ShieldCheck size={24} style={{ color: '#FF6600', flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <h4 style={{ color: '#FFFFFF', fontSize: '0.92rem', fontWeight: 700, margin: '0 0 6px' }}>
+                  Panduan Hak Akses Pengguna (Role-Based Access Control)
+                </h4>
+                <div style={{ fontSize: '0.8rem', color: '#94A3B8', lineHeight: 1.6 }}>
+                  <p style={{ margin: '0 0 6px' }}>
+                    <strong style={{ color: '#60A5FA' }}>🛡️ Super Admin:</strong> Memiliki wewenang penuh mengakses seluruh 10 menu portal admin, termasuk data calon klien (Leads), WhatsApp konsultan, profil direksi, legalitas, manajemen pengguna, dan sinkronisasi database cloud.
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    <strong style={{ color: '#FF8800' }}>✍️ Penulis Artikel:</strong> Dikhususkan untuk tim konten/penulis. Saat login, sistem hanya menampilkan menu <strong>"Kelola Artikel & Blog"</strong>. Menu sensitif perusahaan disembunyikan dan dikunci demi menjaga keamanan informasi bisnis.
+                  </p>
+                </div>
+              </div>
             </div>
 
           </div>
@@ -5107,6 +5994,299 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 >
                   <CheckCircle2 size={16} />
                   <span>{editingTeamMemberId ? 'Selesai & Simpan Perubahan' : 'Selesai & Tambahkan Direksi'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADD/EDIT USER MODAL (RBAC) */}
+      {userModalOpen && (
+        <div className="admin-modal-overlay" onClick={() => setUserModalOpen(false)}>
+          <div className="admin-modal-card" style={{ maxWidth: '580px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div className="admin-stat-icon-wrap blue" style={{ width: '36px', height: '36px' }}>
+                  <UserCheck size={18} />
+                </div>
+                <div>
+                  <h3 className="admin-modal-title">
+                    {editingUserId ? 'Edit Akun Pengguna' : 'Tambah Pengguna & Penulis Baru'}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.74rem', color: '#94A3B8' }}>
+                    {editingUserId ? 'Perbarui informasi profil dan hak akses akun ini' : 'Buat kredensial login baru untuk tim administrator atau penulis artikel'}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setUserModalOpen(false)} className="admin-modal-close">
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveUserSubmit} className="admin-modal-body space-y">
+              {/* Nama Lengkap */}
+              <div className="admin-form-group">
+                <label className="admin-label">Nama Lengkap & Gelar <span style={{ color: '#FF6600' }}>*</span></label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Contoh: Budi Santoso, S.T. / Sarah Pratami"
+                  value={userFormData.fullName}
+                  onChange={(e) => setUserFormData({ ...userFormData, fullName: e.target.value })}
+                  className="admin-input"
+                />
+              </div>
+
+              {/* Username & Posisi Row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div className="admin-form-group">
+                  <label className="admin-label">Username Login <span style={{ color: '#FF6600' }}>*</span></label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Contoh: budi_penulis"
+                    value={userFormData.username}
+                    onChange={(e) => setUserFormData({ ...userFormData, username: e.target.value.toLowerCase().replace(/\s+/g, '') })}
+                    className="admin-input"
+                  />
+                  <span style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '3px' }}>
+                    Huruf kecil & angka (tanpa spasi)
+                  </span>
+                </div>
+
+                <div className="admin-form-group">
+                  <label className="admin-label">Jabatan / Spesialisasi</label>
+                  <input 
+                    type="text" 
+                    placeholder="Contoh: HVAC Specialist / Writer"
+                    value={userFormData.titlePosition}
+                    onChange={(e) => setUserFormData({ ...userFormData, titlePosition: e.target.value })}
+                    className="admin-input"
+                  />
+                  <span style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '3px' }}>
+                    Ditampilkan di header & artikel
+                  </span>
+                </div>
+              </div>
+
+              {/* Hak Akses / Role Selector */}
+              <div className="admin-form-group">
+                <label className="admin-label">Pilih Peran & Hak Akses (Role) <span style={{ color: '#FF6600' }}>*</span></label>
+                <div className="admin-role-selector-grid">
+                  <div 
+                    onClick={() => setUserFormData({ ...userFormData, role: 'author' })}
+                    className={`admin-role-selector-card ${userFormData.role === 'author' ? 'active' : ''}`}
+                  >
+                    <div className="admin-role-card-header">
+                      <span className="admin-role-card-title">
+                        ✍️ Penulis Artikel
+                      </span>
+                      {userFormData.role === 'author' && <Check size={16} style={{ color: '#FF6600' }} />}
+                    </div>
+                    <p className="admin-role-card-desc">
+                      <strong>Khusus Kelola Artikel & Blog.</strong> Menu sensitif (Leads klien, WhatsApp, legalitas, database) disembunyikan demi privasi.
+                    </p>
+                  </div>
+
+                  <div 
+                    onClick={() => setUserFormData({ ...userFormData, role: 'super_admin' })}
+                    className={`admin-role-selector-card ${userFormData.role === 'super_admin' ? 'active blue' : ''}`}
+                  >
+                    <div className="admin-role-card-header">
+                      <span className="admin-role-card-title">
+                        🛡️ Super Admin
+                      </span>
+                      {userFormData.role === 'super_admin' && <Check size={16} style={{ color: '#3B82F6' }} />}
+                    </div>
+                    <p className="admin-role-card-desc">
+                      <strong>Akses Penuh.</strong> Bisa membuka seluruh 10 menu portal, leads, legalitas, database, dan kelola akun pengguna lain.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Password Input */}
+              <div className="admin-form-group">
+                <label className="admin-label">
+                  {editingUserId ? 'Ganti Password (Opsional)' : 'Password Akun Baru'} {!editingUserId && <span style={{ color: '#FF6600' }}>*</span>}
+                </label>
+                <div className="admin-input-wrapper">
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    required={!editingUserId}
+                    minLength={6}
+                    placeholder={editingUserId ? "Biarkan kosong jika password tidak ingin diubah..." : "Minimal 6 karakter..."}
+                    value={userFormData.password}
+                    onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
+                    className="admin-input"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="admin-eye-btn"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <span style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '3px' }}>
+                  Kata sandi otomatis dienkripsi dengan standar salted SHA-256
+                </span>
+              </div>
+
+              {/* Pilihan Avatar Foto */}
+              <div className="admin-form-group">
+                <label className="admin-label">Pilih Foto / Avatar Penulis</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', margin: '6px 0 10px' }}>
+                  {PRESET_AVATARS.map((av) => (
+                    <button
+                      key={av.id}
+                      type="button"
+                      onClick={() => setUserFormData({ ...userFormData, avatar: av.url })}
+                      className={`admin-avatar-preset-btn ${userFormData.avatar === av.url ? 'active' : ''}`}
+                      title={av.name}
+                    >
+                      <img src={av.url} alt={av.name} onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }} />
+                    </button>
+                  ))}
+                </div>
+                <input 
+                  type="text" 
+                  placeholder="Atau ketik URL foto kustom..."
+                  value={userFormData.avatar}
+                  onChange={(e) => setUserFormData({ ...userFormData, avatar: e.target.value })}
+                  className="admin-input"
+                  style={{ fontSize: '0.8rem' }}
+                />
+              </div>
+
+              {/* Status Aktif */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 16px',
+                background: '#040E1C',
+                borderRadius: '10px',
+                border: '1px solid #1E293B'
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#FFFFFF' }}>Izinkan Akun Ini Login</div>
+                  <div style={{ fontSize: '0.72rem', color: '#94A3B8' }}>Jika dinonaktifkan, akun tidak dapat masuk ke portal admin</div>
+                </div>
+                <input 
+                  type="checkbox" 
+                  id="user-is-active-toggle"
+                  checked={userFormData.isActive}
+                  onChange={(e) => setUserFormData({ ...userFormData, isActive: e.target.checked })}
+                  style={{ width: '18px', height: '18px', accentColor: '#FF6600', cursor: 'pointer' }}
+                />
+              </div>
+
+              <div className="admin-modal-footer" style={{ borderTop: '1px solid #1E293B', paddingTop: '16px', marginTop: '16px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setUserModalOpen(false)}
+                  className="admin-btn-secondary"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit" 
+                  className="admin-btn-primary"
+                  style={{ minWidth: '160px', justifyContent: 'center' }}
+                >
+                  <CheckCircle2 size={16} />
+                  <span>{editingUserId ? 'Simpan Perubahan' : 'Buat Pengguna Baru'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* PASSWORD RESET MODAL */}
+      {pwdResetModalOpen && resetPwdTargetUser && (
+        <div className="admin-modal-overlay" onClick={() => setPwdResetModalOpen(false)}>
+          <div className="admin-modal-card" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div className="admin-stat-icon-wrap orange" style={{ width: '36px', height: '36px' }}>
+                  <KeyRound size={18} />
+                </div>
+                <div>
+                  <h3 className="admin-modal-title">Ganti Password Pengguna</h3>
+                  <p style={{ margin: 0, fontSize: '0.74rem', color: '#94A3B8' }}>
+                    Ubah kata sandi untuk akun @{resetPwdTargetUser.username}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setPwdResetModalOpen(false)} className="admin-modal-close">
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveResetUserPasswordSubmit} className="admin-modal-body space-y">
+              <div style={{
+                padding: '12px 14px',
+                background: '#040E1C',
+                borderRadius: '10px',
+                border: '1px solid #1E293B',
+                fontSize: '0.8rem',
+                color: '#CBD5E1',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                <img 
+                  src={resetPwdTargetUser.avatar || "/images/avatar_ade.jpg"} 
+                  alt={resetPwdTargetUser.fullName}
+                  style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover' }}
+                  onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
+                />
+                <div>
+                  <div style={{ fontWeight: 700, color: '#FFFFFF' }}>{resetPwdTargetUser.fullName}</div>
+                  <div style={{ fontSize: '0.72rem', color: '#38BDF8' }}>@{resetPwdTargetUser.username} • {resetPwdTargetUser.role === 'author' ? 'Penulis' : 'Super Admin'}</div>
+                </div>
+              </div>
+
+              <div className="admin-form-group">
+                <label className="admin-label">Password Baru <span style={{ color: '#FF6600' }}>*</span></label>
+                <div className="admin-input-wrapper">
+                  <input 
+                    type={showResetNewPassword ? "text" : "password"}
+                    required
+                    minLength={6}
+                    placeholder="Masukkan password baru (min. 6 karakter)..."
+                    value={resetNewPassword}
+                    onChange={(e) => setResetNewPassword(e.target.value)}
+                    className="admin-input"
+                    autoFocus
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowResetNewPassword(!showResetNewPassword)}
+                    className="admin-eye-btn"
+                  >
+                    {showResetNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="admin-modal-footer" style={{ borderTop: '1px solid #1E293B', paddingTop: '16px', marginTop: '16px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setPwdResetModalOpen(false)}
+                  className="admin-btn-secondary"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit" 
+                  className="admin-btn-primary"
+                >
+                  <KeyRound size={16} />
+                  <span>Simpan Password Baru</span>
                 </button>
               </div>
             </form>

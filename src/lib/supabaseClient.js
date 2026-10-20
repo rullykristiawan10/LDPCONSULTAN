@@ -524,3 +524,88 @@ export const syncSiteSettingsToSupabase = async (settings) => {
   }
 };
 
+/* =========================================================================
+   ADMIN & AUTHOR USERS SERVICES (MULTI-USER / RBAC)
+   ========================================================================= */
+
+export const fetchAdminUsersFromSupabase = async () => {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client
+      .from('admin_users')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (error) {
+      if (error.code === '42P01') return null; // Table does not exist yet
+      throw error;
+    }
+    if (!data || data.length === 0) return null;
+
+    return data.map(u => ({
+      id: u.id,
+      username: u.username,
+      fullName: u.full_name || u.fullName,
+      role: u.role || 'author',
+      passwordHash: u.password_hash || u.passwordHash,
+      titlePosition: u.title_position || u.titlePosition || 'Technical Writer',
+      avatar: u.avatar || '/images/avatar_ade.jpg',
+      isActive: u.is_active !== false,
+      createdAt: u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : '2026-10-01'
+    }));
+  } catch (err) {
+    console.warn('Fallback to local users (Supabase fetch error):', err.message);
+    return null;
+  }
+};
+
+export const syncAdminUsersToSupabase = async (usersList) => {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, message: 'Supabase belum terkonfigurasi' };
+
+  try {
+    const payload = usersList.map(u => ({
+      ...(u.id && typeof u.id === 'number' && u.id < 10000000000 ? { id: u.id } : {}),
+      username: u.username.toLowerCase().trim(),
+      full_name: u.fullName.trim(),
+      role: u.role || 'author',
+      password_hash: u.passwordHash,
+      title_position: u.titlePosition || 'Technical Writer',
+      avatar: u.avatar || '/images/avatar_ade.jpg',
+      is_active: u.isActive !== false,
+      updated_at: new Date().toISOString()
+    }));
+
+    const { error } = await client
+      .from('admin_users')
+      .upsert(payload, { onConflict: 'username' });
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    console.error('Supabase admin users sync error:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+export const deleteAdminUserFromSupabase = async (username) => {
+  const client = getSupabaseClient();
+  if (!client) return { success: false };
+
+  try {
+    const { error } = await client
+      .from('admin_users')
+      .delete()
+      .eq('username', username.toLowerCase());
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    console.error('Supabase delete user error:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+

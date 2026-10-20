@@ -11,6 +11,7 @@ export const STORAGE_KEYS = {
   PROJECTS: 'ldp_projects',
   SETTINGS: 'ldp_site_settings',
   LEADS: 'ldp_consultation_leads',
+  USERS: 'ldp_admin_users',
   SUPABASE_URL: 'ldp_supabase_url',
   SUPABASE_KEY: 'ldp_supabase_anon_key'
 };
@@ -21,7 +22,8 @@ export const SYNC_EVENTS = {
   BLOG: 'blog-articles-updated',
   PROJECTS: 'ldp-projects-updated',
   SETTINGS: 'ldp-settings-updated',
-  LEADS: 'ldp-leads-updated'
+  LEADS: 'ldp-leads-updated',
+  USERS: 'ldp-users-updated'
 };
 
 // Singleton BroadcastChannel for ultra-fast cross-tab messaging
