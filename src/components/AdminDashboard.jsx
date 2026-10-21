@@ -976,6 +976,7 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
 
   // Modals for Articles
   const [showArticleEditorModal, setShowArticleEditorModal] = useState(false);
+  const [isArticleEditorPage, setIsArticleEditorPage] = useState(false); // Full-page editor mode
   const [editingArticleId, setEditingArticleId] = useState(null); // null = Write new, number = Edit
   const [previewingArticle, setPreviewingArticle] = useState(null); // for quick preview modal
   const [editorTab, setEditorTab] = useState('write'); // 'write' or 'preview'
@@ -1314,27 +1315,31 @@ CREATE POLICY "Dashboard can modify admin_users" ON public.admin_users FOR ALL U
       isCustomAuthor: currentUser?.role === 'author',
       publishedAt: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
       views: Math.floor(Math.random() * 250) + 120,
-      content: `### Latar Belakang & Analisis Permasalahan
-Dalam pengelolaan gedung dan fasilitas industri modern, konsumsi energi sistem tata udara (HVAC) dan keandalan sistem kelistrikan (MEP) memegang peranan krusial terhadap total biaya operasional gedung...
+      content: `<h3>Latar Belakang &amp; Analisis Permasalahan</h3>
+<p>Dalam pengelolaan gedung dan fasilitas industri modern, konsumsi energi sistem tata udara (HVAC) dan keandalan sistem kelistrikan (MEP) memegang peranan krusial terhadap total biaya operasional gedung...</p>
 
----
+<hr style="border:none;border-top:2px solid #E2E8F0;margin:20px 0;" />
 
-### Solusi Rekayasa Berbasis Engineering LDP
-1. **Audit Termal & Simulasi Akurat**: Menggunakan instrumen berkalibrasi dan pemodelan komputasi untuk mengidentifikasi titik kebocoran energi.
-2. **Optimasi Sistem Hidronik & Distribusi Udara**: Menyelaraskan kapasitas chiller, pompa VFD, dan balancing katup PICV.
-3. **Kepatuhan Standar Regulasi**: Memastikan implementasi memenuhi standar SNI dan ASHRAE.
+<h3>Solusi Rekayasa Berbasis Engineering LDP</h3>
+<ol>
+  <li><strong>Audit Termal &amp; Simulasi Akurat:</strong> Menggunakan instrumen berkalibrasi dan pemodelan komputasi untuk mengidentifikasi titik kebocoran energi.</li>
+  <li><strong>Optimasi Sistem Hidronik &amp; Distribusi Udara:</strong> Menyelaraskan kapasitas chiller, pompa VFD, dan balancing katup PICV.</li>
+  <li><strong>Kepatuhan Standar Regulasi:</strong> Memastikan implementasi memenuhi standar SNI dan ASHRAE.</li>
+</ol>
 
----
+<hr style="border:none;border-top:2px solid #E2E8F0;margin:20px 0;" />
 
-> **Rekomendasi Insinyur LDP:** "Perencanaan teknis yang terukur di awal mampu menghemat biaya perawatan dan memperpanjang usia pakai aset mekanikal hingga belasan tahun."
+<blockquote style="border-left:4px solid #FF6600;padding:12px 16px;background:#FFF7ED;color:#9A3412;margin:16px 0;border-radius:0 8px 8px 0;font-style:italic;">
+  <strong>💬 Rekomendasi Insinyur LDP:</strong> "Perencanaan teknis yang terukur di awal mampu menghemat biaya perawatan dan memperpanjang usia pakai aset mekanikal hingga belasan tahun."
+</blockquote>
 
----
+<hr style="border:none;border-top:2px solid #E2E8F0;margin:20px 0;" />
 
-### Hasil & Kesimpulan Evaluasi
-Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapat ditingkatkan secara signifikan tanpa mengorbankan kenyamanan penghuni.`
+<h3>Hasil &amp; Kesimpulan Evaluasi</h3>
+<p>Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapat ditingkatkan secara signifikan tanpa mengorbankan kenyamanan penghuni.</p>`
     });
     setEditorTab('write');
-    setShowArticleEditorModal(true);
+    setIsArticleEditorPage(true);
   };
 
   const handleOpenEditArticle = (art) => {
@@ -1361,7 +1366,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
       content: art.content || ''
     });
     setEditorTab('write');
-    setShowArticleEditorModal(true);
+    setIsArticleEditorPage(true);
   };
 
   const handleDeleteArticle = (id, title) => {
@@ -1442,29 +1447,81 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
     if (isSupabaseConfigured()) {
       syncArticleToSupabase(cleanPayload);
     }
+    setIsArticleEditorPage(false);
     setShowArticleEditorModal(false);
   };
 
-  const handleInsertMarkdown = (prefix, suffix = '', defaultPlaceholder = '') => {
-    const textarea = document.getElementById('admin-article-content-textarea');
-    if (!textarea) return;
+  // WYSIWYG editor ref
+  const wysiwygRef = React.useRef(null);
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = textarea.value.substring(start, end) || defaultPlaceholder;
-    const replacement = `${prefix}${selectedText}${suffix}`;
+  // execCommand wrapper for WYSIWYG toolbar actions
+  const execWysiwyg = (command, value = null) => {
+    const editor = wysiwygRef.current;
+    if (!editor) return;
+    editor.focus();
+    document.execCommand(command, false, value);
+    // After command, sync HTML back to state
+    setArticleFormData(prev => ({ ...prev, content: editor.innerHTML }));
+  };
 
-    const newContent = textarea.value.substring(0, start) + replacement + textarea.value.substring(end);
-    setArticleFormData(prev => ({ ...prev, content: newContent }));
+  // Insert HTML block at cursor position
+  const insertWysiwygHtml = (html) => {
+    const editor = wysiwygRef.current;
+    if (!editor) return;
+    editor.focus();
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const fragment = range.createContextualFragment(html);
+      range.insertNode(fragment);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      editor.innerHTML += html;
+    }
+    setArticleFormData(prev => ({ ...prev, content: editor.innerHTML }));
+  };
 
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + prefix.length, start + prefix.length + selectedText.length);
-    }, 50);
+  // Sync editor content to state on input
+  const handleWysiwygInput = () => {
+    const editor = wysiwygRef.current;
+    if (editor) {
+      setArticleFormData(prev => ({ ...prev, content: editor.innerHTML }));
+    }
+  };
+
+  // On open new/edit article, sync content to editor
+  React.useEffect(() => {
+    if (showArticleEditorModal && editorTab === 'write') {
+      setTimeout(() => {
+        const editor = wysiwygRef.current;
+        if (editor && editor.innerHTML !== articleFormData.content) {
+          editor.innerHTML = articleFormData.content || '';
+        }
+      }, 80);
+    }
+  }, [showArticleEditorModal, editorTab]);
+
+  // Detect if content is HTML (WYSIWYG) or legacy Markdown
+  const isHtmlContent = (content) => {
+    if (!content) return false;
+    return /<[a-z][\s\S]*>/i.test(content);
   };
 
   const renderPreviewMarkdown = (content) => {
     if (!content) return <p style={{ color: '#94A3B8', fontStyle: 'italic' }}>Belum ada konten artikel...</p>;
+    // If HTML content (from WYSIWYG), render directly
+    if (isHtmlContent(content)) {
+      return (
+        <div
+          className="wysiwyg-preview-render"
+          dangerouslySetInnerHTML={{ __html: content }}
+          style={{ fontSize: '0.9rem', color: '#334155', lineHeight: 1.8 }}
+        />
+      );
+    }
 
     const blocks = content.split('\n\n');
     return blocks.map((block, idx) => {
@@ -2447,6 +2504,455 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
               <ChevronRight size={16} style={{ transform: 'rotate(180deg)' }} />
               <span>Kembali ke Website Utama</span>
             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+
+  // SCREEN 2.5: FULL-PAGE ARTICLE EDITOR (WordPress-Style Split View)
+  if (isArticleEditorPage) {
+    return (
+      <div className="article-editor-page">
+
+        {/* TOP BAR */}
+        <div className="article-editor-topbar">
+          <div className="article-editor-topbar-left">
+            <button
+              type="button"
+              onClick={() => { setIsArticleEditorPage(false); setShowArticleEditorModal(false); }}
+              className="article-editor-back-btn"
+            >
+              <ChevronRight size={16} style={{ transform: 'rotate(180deg)' }} />
+              <span>Kembali ke Dashboard</span>
+            </button>
+            <div className="article-editor-topbar-title">
+              <BookOpen size={16} style={{ color: '#FF6600' }} />
+              <span>{editingArticleId ? 'Edit Artikel' : 'Tulis Artikel Baru'}</span>
+              {articleFormData.title && (
+                <span className="article-editor-topbar-slug">
+                  — {articleFormData.title.substring(0, 40)}{articleFormData.title.length > 40 ? '...' : ''}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="article-editor-topbar-right">
+            <span className="article-editor-live-badge">
+              <span className="article-editor-live-dot" />
+              Live Preview
+            </span>
+            <button
+              type="button"
+              onClick={() => { setIsArticleEditorPage(false); setShowArticleEditorModal(false); }}
+              className="article-editor-cancel-btn"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveArticleSubmit}
+              className="article-editor-publish-btn"
+            >
+              <CheckCircle2 size={16} />
+              <span>{editingArticleId ? 'Simpan Perubahan' : 'Terbitkan Artikel'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* SPLIT PANE BODY */}
+        <div className="article-editor-split">
+
+          {/* LEFT: EDITOR PANEL */}
+          <div className="article-editor-left">
+            <form onSubmit={handleSaveArticleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+
+              {/* Judul Artikel */}
+              <div>
+                <input
+                  type="text"
+                  required
+                  placeholder="Tulis judul artikel di sini..."
+                  value={articleFormData.title}
+                  onChange={(e) => {
+                    const newTitle = e.target.value;
+                    setArticleFormData(prev => ({
+                      ...prev,
+                      title: newTitle,
+                      slug: !editingArticleId && (!prev.slug || prev.slug === generateSlug(prev.title))
+                        ? generateSlug(newTitle)
+                        : prev.slug
+                    }));
+                  }}
+                  className="article-editor-title-input"
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
+                  <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>URL:</span>
+                  <span style={{ fontSize: '0.72rem', color: '#38BDF8', fontFamily: 'monospace' }}>
+                    /blog/{articleFormData.slug || 'slug-artikel-anda'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Meta Row: Kategori + Featured + Waktu */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="admin-form-group">
+                  <label className="admin-label">Kategori</label>
+                  <select
+                    value={articleFormData.isCustomCategory ? 'custom' : articleFormData.category}
+                    onChange={(e) => {
+                      if (e.target.value === 'custom') {
+                        setArticleFormData({ ...articleFormData, isCustomCategory: true });
+                      } else {
+                        setArticleFormData({ ...articleFormData, isCustomCategory: false, category: e.target.value });
+                      }
+                    }}
+                    className="admin-select"
+                  >
+                    {ARTICLE_CATEGORIES.map((cat, i) => <option key={i} value={cat}>{cat}</option>)}
+                    <option value="custom">+ Kategori Baru...</option>
+                  </select>
+                  {articleFormData.isCustomCategory && (
+                    <input
+                      type="text"
+                      placeholder="Nama kategori baru..."
+                      value={articleFormData.customCategory}
+                      onChange={(e) => setArticleFormData({ ...articleFormData, customCategory: e.target.value })}
+                      className="admin-input"
+                      style={{ marginTop: '6px' }}
+                    />
+                  )}
+                </div>
+                <div className="admin-form-group">
+                  <label className="admin-label">Tanggal Terbit</label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: 21 Oktober 2026"
+                    value={articleFormData.publishedAt}
+                    onChange={(e) => setArticleFormData({ ...articleFormData, publishedAt: e.target.value })}
+                    className="admin-input"
+                  />
+                </div>
+              </div>
+
+              {/* Ringkasan */}
+              <div className="admin-form-group">
+                <label className="admin-label">Ringkasan Eksekutif (Excerpt) <span style={{ color: '#FF6600' }}>*</span></label>
+                <textarea
+                  required
+                  rows={2}
+                  placeholder="Tuliskan 1–3 kalimat intisari artikel..."
+                  value={articleFormData.summary}
+                  onChange={(e) => setArticleFormData({ ...articleFormData, summary: e.target.value })}
+                  className="admin-input"
+                  style={{ resize: 'vertical', minHeight: '52px' }}
+                />
+              </div>
+
+              {/* Gambar Sampul */}
+              <div className="admin-form-group">
+                <label className="admin-label">Foto Sampul</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <img
+                    src={articleFormData.image || '/images/office_presentation.jpg'}
+                    alt="Cover"
+                    style={{ width: '90px', height: '56px', borderRadius: '8px', objectFit: 'cover', border: '2px solid #FF6600', flexShrink: 0 }}
+                    onError={(e) => { e.target.src = '/images/office_presentation.jpg'; }}
+                  />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label className="admin-btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '6px 12px', fontSize: '0.78rem', width: 'fit-content' }}>
+                      <Upload size={13} />
+                      <span>Upload Foto</span>
+                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleImageFileUpload(e, (base64) => setArticleFormData({ ...articleFormData, image: base64 }))} />
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Atau URL gambar..."
+                      value={articleFormData.image}
+                      onChange={(e) => setArticleFormData({ ...articleFormData, image: e.target.value })}
+                      className="admin-input"
+                      style={{ fontSize: '0.76rem', padding: '5px 10px' }}
+                    />
+                  </div>
+                </div>
+                {/* Preset covers */}
+                <div className="admin-cover-preset-grid" style={{ marginTop: '8px' }}>
+                  {PRESET_ARTICLE_COVERS.map((preset, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => setArticleFormData({ ...articleFormData, image: preset.url })}
+                      className={`admin-cover-preset-card ${articleFormData.image === preset.url ? 'active' : ''}`}
+                    >
+                      <img src={preset.url} alt={preset.label} />
+                      <span className="admin-cover-preset-label">{preset.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Penulis & Tags */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="admin-form-group">
+                  <label className="admin-label">Penulis</label>
+                  <select
+                    value={articleFormData.isCustomAuthor ? 'custom' : articleFormData.authorName}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'custom') {
+                        setArticleFormData({ ...articleFormData, isCustomAuthor: true });
+                      } else {
+                        const found = PRESET_AUTHORS.find(a => a.name === val);
+                        if (found) setArticleFormData({ ...articleFormData, isCustomAuthor: false, authorName: found.name, authorRole: found.role, authorAvatar: found.avatar });
+                      }
+                    }}
+                    className="admin-select"
+                  >
+                    {PRESET_AUTHORS.map((auth, idx) => <option key={idx} value={auth.name}>{auth.name}</option>)}
+                    <option value="custom">+ Penulis Baru...</option>
+                  </select>
+                  {articleFormData.isCustomAuthor && (
+                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <input type="text" placeholder="Nama lengkap penulis" value={articleFormData.authorName} onChange={(e) => setArticleFormData({ ...articleFormData, authorName: e.target.value })} className="admin-input" />
+                      <input type="text" placeholder="Jabatan penulis" value={articleFormData.authorRole} onChange={(e) => setArticleFormData({ ...articleFormData, authorRole: e.target.value })} className="admin-input" />
+                    </div>
+                  )}
+                </div>
+                <div className="admin-form-group">
+                  <label className="admin-label">Tags</label>
+                  <input
+                    type="text"
+                    placeholder="HVAC, Chiller, MEP (pisah koma)"
+                    value={articleFormData.tags}
+                    onChange={(e) => setArticleFormData({ ...articleFormData, tags: e.target.value })}
+                    className="admin-input"
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.78rem', color: '#0F172A', fontWeight: 600 }}>
+                      <input
+                        type="checkbox"
+                        checked={articleFormData.featured}
+                        onChange={(e) => setArticleFormData({ ...articleFormData, featured: e.target.checked })}
+                        style={{ width: '15px', height: '15px', accentColor: '#FF6600' }}
+                      />
+                      <span>⭐ Artikel Utama (Featured)</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* ====== WYSIWYG EDITOR ====== */}
+              <div className="admin-form-group">
+                <label className="admin-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                  <span>✏️ Konten Artikel</span>
+                  <span style={{ fontSize: '0.7rem', color: '#38BDF8', background: 'rgba(56,189,248,0.1)', padding: '2px 8px', borderRadius: '6px', border: '1px solid rgba(56,189,248,0.2)', marginLeft: '4px' }}>
+                    🖊️ WYSIWYG Live
+                  </span>
+                </label>
+
+                {/* Toolbar */}
+                <div className="wysiwyg-toolbar">
+                  <div className="wysiwyg-toolbar-group">
+                    <select onChange={(e) => { execWysiwyg('formatBlock', e.target.value); e.target.value = ''; }} className="wysiwyg-select" defaultValue="">
+                      <option value="" disabled>Format</option>
+                      <option value="p">Paragraf</option>
+                      <option value="h1">H1</option>
+                      <option value="h2">H2</option>
+                      <option value="h3">H3</option>
+                      <option value="h4">H4</option>
+                      <option value="blockquote">Blockquote</option>
+                      <option value="pre">Kode</option>
+                    </select>
+                  </div>
+                  <div className="wysiwyg-toolbar-group">
+                    <select onChange={(e) => { execWysiwyg('fontName', e.target.value); e.target.value = ''; }} className="wysiwyg-select" defaultValue="">
+                      <option value="" disabled>Font</option>
+                      <option value="Inter, sans-serif">Inter</option>
+                      <option value="Georgia, serif">Georgia</option>
+                      <option value="'Times New Roman', serif">Times New Roman</option>
+                      <option value="Arial, sans-serif">Arial</option>
+                      <option value="'Courier New', monospace">Courier</option>
+                    </select>
+                  </div>
+                  <div className="wysiwyg-toolbar-group">
+                    <select onChange={(e) => { execWysiwyg('fontSize', e.target.value); e.target.value = ''; }} className="wysiwyg-select wysiwyg-select-sm" defaultValue="">
+                      <option value="" disabled>Size</option>
+                      <option value="1">8pt</option><option value="2">10pt</option><option value="3">12pt</option>
+                      <option value="4">14pt</option><option value="5">18pt</option><option value="6">24pt</option><option value="7">36pt</option>
+                    </select>
+                  </div>
+                  <div className="wysiwyg-divider" />
+                  <div className="wysiwyg-toolbar-group">
+                    <button type="button" onClick={() => execWysiwyg('bold')} className="wysiwyg-btn" title="Tebal"><b>B</b></button>
+                    <button type="button" onClick={() => execWysiwyg('italic')} className="wysiwyg-btn" title="Miring"><i>I</i></button>
+                    <button type="button" onClick={() => execWysiwyg('underline')} className="wysiwyg-btn" title="Garis Bawah"><u>U</u></button>
+                    <button type="button" onClick={() => execWysiwyg('strikeThrough')} className="wysiwyg-btn" title="Coret"><s>S</s></button>
+                  </div>
+                  <div className="wysiwyg-divider" />
+                  <div className="wysiwyg-toolbar-group">
+                    <label className="wysiwyg-btn wysiwyg-color-btn" title="Warna Teks">
+                      <span style={{ fontWeight: 700, fontSize: '0.75rem', color: '#EF4444' }}>A</span>
+                      <input type="color" defaultValue="#EF4444" style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} onChange={(e) => execWysiwyg('foreColor', e.target.value)} />
+                    </label>
+                    <label className="wysiwyg-btn wysiwyg-color-btn" title="Sorot Teks">
+                      <span style={{ fontWeight: 700, fontSize: '0.75rem', background: '#FEF08A', padding: '0 2px' }}>H</span>
+                      <input type="color" defaultValue="#FEF08A" style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} onChange={(e) => execWysiwyg('hiliteColor', e.target.value)} />
+                    </label>
+                  </div>
+                  <div className="wysiwyg-divider" />
+                  <div className="wysiwyg-toolbar-group">
+                    <button type="button" onClick={() => execWysiwyg('justifyLeft')} className="wysiwyg-btn" title="Kiri">⬅</button>
+                    <button type="button" onClick={() => execWysiwyg('justifyCenter')} className="wysiwyg-btn" title="Tengah">↔</button>
+                    <button type="button" onClick={() => execWysiwyg('justifyRight')} className="wysiwyg-btn" title="Kanan">➡</button>
+                    <button type="button" onClick={() => execWysiwyg('justifyFull')} className="wysiwyg-btn" title="Rata Penuh">≡</button>
+                  </div>
+                  <div className="wysiwyg-divider" />
+                  <div className="wysiwyg-toolbar-group">
+                    <button type="button" onClick={() => execWysiwyg('insertUnorderedList')} className="wysiwyg-btn" title="Bullet">• ≡</button>
+                    <button type="button" onClick={() => execWysiwyg('insertOrderedList')} className="wysiwyg-btn" title="Numbered">1.</button>
+                    <button type="button" onClick={() => execWysiwyg('outdent')} className="wysiwyg-btn" title="Outdent">⟵</button>
+                    <button type="button" onClick={() => execWysiwyg('indent')} className="wysiwyg-btn" title="Indent">⟶</button>
+                  </div>
+                  <div className="wysiwyg-divider" />
+                  <div className="wysiwyg-toolbar-group">
+                    <button type="button" onClick={() => insertWysiwygHtml('<blockquote style="border-left:4px solid #FF6600;padding:12px 16px;background:#FFF7ED;color:#9A3412;margin:16px 0;border-radius:0 8px 8px 0;font-style:italic;"><strong>💬 Rekomendasi Insinyur LDP:</strong> "Tuliskan panduan rekayasa di sini..."</blockquote><p><br></p>')} className="wysiwyg-btn wysiwyg-btn-accent" title="Kutipan LDP">💬</button>
+                    <button type="button" onClick={() => insertWysiwygHtml('<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:0.85rem;"><thead><tr style="background:#0B192C;color:#fff;"><th style="padding:8px 12px;border:1px solid #1E293B;">Parameter</th><th style="padding:8px 12px;border:1px solid #1E293B;">Standar</th><th style="padding:8px 12px;border:1px solid #1E293B;">Solusi LDP</th></tr></thead><tbody><tr><td style="padding:8px 12px;border:1px solid #E2E8F0;">Konsumsi Daya</td><td style="padding:8px 12px;border:1px solid #E2E8F0;">0.95 kW/TR</td><td style="padding:8px 12px;border:1px solid #E2E8F0;color:#16A34A;font-weight:700;">0.62 kW/TR</td></tr></tbody></table><p><br></p>')} className="wysiwyg-btn wysiwyg-btn-accent" title="Tabel">📊</button>
+                    <button type="button" onClick={() => insertWysiwygHtml('<hr style="border:none;border-top:2px solid #E2E8F0;margin:20px 0;" /><p><br></p>')} className="wysiwyg-btn" title="Garis">➖</button>
+                  </div>
+                  <div className="wysiwyg-divider" />
+                  <div className="wysiwyg-toolbar-group">
+                    <label className="wysiwyg-btn wysiwyg-btn-image" title="Upload Gambar" style={{ cursor: 'pointer' }}>
+                      🖼️
+                      <input type="file" accept="image/*" style={{ display: 'none' }}
+                        onChange={(e) => handleContentImageFileUpload(e, (base64) => {
+                          insertWysiwygHtml(`<figure style="margin:20px 0;text-align:center;"><img src="${base64}" alt="Ilustrasi Teknis" style="max-width:100%;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,0.12);" /><figcaption style="font-size:0.78rem;color:#64748B;margin-top:6px;font-style:italic;">📷 Ilustrasi Teknis</figcaption></figure><p><br></p>`);
+                        })}
+                      />
+                    </label>
+                    <button type="button" onClick={() => { const url = window.prompt('URL gambar:'); if (url) insertWysiwygHtml(`<figure style="margin:20px 0;text-align:center;"><img src="${url}" alt="Ilustrasi" style="max-width:100%;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,0.12);" /><figcaption style="font-size:0.78rem;color:#64748B;margin-top:6px;font-style:italic;">📷 Ilustrasi</figcaption></figure><p><br></p>`); }} className="wysiwyg-btn wysiwyg-btn-image" title="Gambar URL">🔗</button>
+                  </div>
+                  <div className="wysiwyg-divider" />
+                  <div className="wysiwyg-toolbar-group">
+                    <button type="button" onClick={() => execWysiwyg('undo')} className="wysiwyg-btn" title="Undo">↩</button>
+                    <button type="button" onClick={() => execWysiwyg('redo')} className="wysiwyg-btn" title="Redo">↪</button>
+                    <button type="button" onClick={() => execWysiwyg('removeFormat')} className="wysiwyg-btn" title="Hapus Format">✕</button>
+                  </div>
+                </div>
+
+                {/* WYSIWYG ContentEditable */}
+                <div
+                  ref={wysiwygRef}
+                  id="admin-article-wysiwyg-editor"
+                  contentEditable={true}
+                  suppressContentEditableWarning={true}
+                  onInput={handleWysiwygInput}
+                  onBlur={handleWysiwygInput}
+                  className="wysiwyg-editor-body article-editor-wysiwyg-body"
+                  data-placeholder="Mulai menulis konten artikel di sini... Apa yang Anda ketik akan langsung tampil di pratinjau sebelah kanan."
+                  style={{
+                    minHeight: '500px',
+                    padding: '20px 22px',
+                    background: '#FFFFFF',
+                    border: '1px solid #CBD5E1',
+                    borderTop: 'none',
+                    borderRadius: '0 0 10px 10px',
+                    outline: 'none',
+                    fontSize: '0.93rem',
+                    lineHeight: 1.85,
+                    color: '#1E293B',
+                    fontFamily: 'Inter, sans-serif',
+                    overflowY: 'auto',
+                  }}
+                />
+              </div>
+
+            </form>
+          </div>
+
+          {/* RIGHT: LIVE PREVIEW PANEL */}
+          <div className="article-editor-right">
+            <div className="article-editor-preview-header">
+              <Eye size={14} style={{ color: '#3B82F6' }} />
+              <span>Pratinjau Langsung</span>
+              <span style={{ marginLeft: 'auto', fontSize: '0.68rem', color: '#94A3B8' }}>Diperbarui otomatis saat Anda mengetik</span>
+            </div>
+
+            <div className="article-editor-preview-body">
+              {/* Article Header Preview */}
+              <div className="article-preview-header-section">
+                <span className="article-preview-cat-badge">
+                  {articleFormData.isCustomCategory ? articleFormData.customCategory : articleFormData.category || 'Kategori'}
+                </span>
+                <h1 className="article-preview-title">
+                  {articleFormData.title || 'Judul Artikel Akan Muncul Di Sini...'}
+                </h1>
+                <div className="article-preview-meta">
+                  <img
+                    src={articleFormData.authorAvatar || '/images/avatar_rizky.jpg'}
+                    alt={articleFormData.authorName}
+                    className="article-preview-avatar"
+                    onError={(e) => { e.target.src = '/images/avatar_rizky.jpg'; }}
+                  />
+                  <div>
+                    <div className="article-preview-author">{articleFormData.authorName || 'Nama Penulis'}</div>
+                    <div className="article-preview-author-role">{articleFormData.authorRole}</div>
+                  </div>
+                  <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.72rem', color: '#64748B' }}>{articleFormData.publishedAt || 'Tanggal Terbit'}</div>
+                    <div style={{ fontSize: '0.7rem', color: '#94A3B8' }}>{articleFormData.readTime || '5 menit'} baca</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cover Image Preview */}
+              {articleFormData.image && (
+                <div className="article-preview-cover">
+                  <img
+                    src={articleFormData.image}
+                    alt="Cover"
+                    style={{ width: '100%', maxHeight: '260px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #E2E8F0' }}
+                    onError={(e) => { e.target.src = '/images/office_presentation.jpg'; }}
+                  />
+                </div>
+              )}
+
+              {/* Summary Preview */}
+              {articleFormData.summary && (
+                <div className="article-preview-summary">
+                  <strong>Ringkasan Eksekutif:</strong>
+                  <p style={{ margin: '4px 0 0', color: '#1E40AF' }}>{articleFormData.summary}</p>
+                </div>
+              )}
+
+              {/* Content Live Preview */}
+              <div className="article-preview-content">
+                {articleFormData.content ? (
+                  /<[a-z][\s\S]*>/i.test(articleFormData.content) ? (
+                    <div
+                      className="blog-wysiwyg-content"
+                      dangerouslySetInnerHTML={{ __html: articleFormData.content }}
+                    />
+                  ) : (
+                    renderPreviewMarkdown(articleFormData.content)
+                  )
+                ) : (
+                  <p style={{ color: '#94A3B8', fontStyle: 'italic', textAlign: 'center', padding: '40px 0' }}>
+                    ✍️ Mulai mengetik di editor kiri untuk melihat pratinjau di sini...
+                  </p>
+                )}
+              </div>
+
+              {/* Tags Preview */}
+              {articleFormData.tags && (
+                <div style={{ marginTop: '20px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {articleFormData.tags.split(',').filter(Boolean).map((tag, idx) => (
+                    <span key={idx} style={{ background: '#EFF6FF', color: '#1D4ED8', padding: '3px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 600 }}>
+                      #{tag.trim()}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -5675,120 +6181,236 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                   </div>
                 </div>
 
-                {/* Editor Konten Markdown */}
+                {/* WYSIWYG Rich Text Editor - Konten Artikel */}
                 <div className="admin-form-group">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                    <label className="admin-label" style={{ margin: 0 }}>
-                      Konten Lengkap Artikel (Format Markdown) <span style={{ color: '#FF6600' }}>*</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label className="admin-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>✏️</span>
+                      Konten Artikel <span style={{ color: '#FF6600' }}>*</span>
                     </label>
-                    <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
-                      Gunakan tombol toolbar di bawah untuk format cepat
+                    <span style={{ fontSize: '0.7rem', color: '#64748B', background: 'rgba(56,189,248,0.1)', padding: '2px 8px', borderRadius: '6px', border: '1px solid rgba(56,189,248,0.2)', color: '#38BDF8' }}>
+                      🖊️ Visual Editor (WYSIWYG)
                     </span>
                   </div>
 
-                  {/* Toolbar */}
-                  <div className="admin-toolbar-wrap">
-                    <button 
-                      type="button" 
-                      onClick={() => handleInsertMarkdown('\n\n### ', '\n', 'Subjudul Bagian Baru')}
-                      className="admin-tool-btn"
-                      title="Tambah Subjudul H3"
-                    >
-                      <strong>H3 Subjudul</strong>
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => handleInsertMarkdown('**', '**', 'teks penting')}
-                      className="admin-tool-btn"
-                      title="Format Teks Tebal"
-                    >
-                      <strong>B Tebal</strong>
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => handleInsertMarkdown('*', '*', 'teks miring')}
-                      className="admin-tool-btn"
-                      title="Format Teks Miring"
-                    >
-                      <em>I Miring</em>
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => handleInsertMarkdown('\n> **Rekomendasi Insinyur LDP:** "', '"\n', 'Kutipan panduan teknis dari konsultan...')}
-                      className="admin-tool-btn"
-                      title="Sisipkan Kotak Kutipan LDP"
-                    >
-                      <span>💬 Kutipan Rekayasa</span>
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => handleInsertMarkdown('\n1. **Poin Pertama**: Penjelasan detail...\n2. **Poin Kedua**: Penjelasan detail...\n3. **Poin Ketiga**: Penjelasan detail...\n')}
-                      className="admin-tool-btn"
-                      title="Sisipkan Daftar Bernomor"
-                    >
-                      <span>📋 Daftar Poin</span>
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => handleInsertMarkdown('\n---\n')}
-                      className="admin-tool-btn"
-                      title="Sisipkan Garis Pembatas"
-                    >
-                      <span>➖ Pembatas</span>
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => handleInsertMarkdown('\n| Parameter Evaluasi | Sistem Standar | Solusi Rekayasa LDP |\n| :--- | :--- | :--- |\n| **Konsumsi Daya** | 0.95 kW/TR | 0.62 kW/TR |\n| **Siklus Hidup Aset** | 10 - 15 Tahun | 20 - 25+ Tahun |\n')}
-                      className="admin-tool-btn"
-                      title="Sisipkan Tabel Perbandingan Standar"
-                    >
-                      <span>📊 Tabel Komparasi</span>
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => handleInsertMarkdown('\n### Hasil Studi Kasus: Fasilitas Industri\n- **Kondisi Awal:** Tagihan listrik dan beban operasional tinggi sebelum audit.\n- **Implementasi LDP:** Balancing hidronik, optimasi VFD, dan konfigurasi setpoint.\n- **Hasil Akhir:** Penghematan daya listrik tercapai 26.5% dengan payback period 1.8 tahun.\n')}
-                      className="admin-tool-btn"
-                      title="Sisipkan Template Studi Kasus ROI"
-                    >
-                      <span>🏢 Studi Kasus ROI</span>
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={handleOpenAddContentImage}
-                      className="admin-tool-btn"
-                      title="Sisipkan atau unggah gambar baru ke dalam konten artikel"
-                      style={{ 
-                        background: 'linear-gradient(135deg, rgba(255,102,0,0.2) 0%, rgba(255,102,0,0.3) 100%)', 
-                        borderColor: '#FF6600', 
-                        color: '#FFB088',
-                        fontWeight: 700
-                      }}
-                    >
-                      <span>🖼️ Sisipkan Gambar</span>
-                    </button>
+                  {/* WYSIWYG Toolbar - Row 1: Heading, Font, Size */}
+                  <div className="wysiwyg-toolbar">
+                    {/* Heading */}
+                    <div className="wysiwyg-toolbar-group">
+                      <select
+                        onChange={(e) => { execWysiwyg('formatBlock', e.target.value); e.target.value = ''; }}
+                        className="wysiwyg-select"
+                        title="Format Heading"
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Format</option>
+                        <option value="p">Paragraf</option>
+                        <option value="h1">Heading 1</option>
+                        <option value="h2">Heading 2</option>
+                        <option value="h3">Heading 3</option>
+                        <option value="h4">Heading 4</option>
+                        <option value="blockquote">Blockquote</option>
+                        <option value="pre">Kode / Pre</option>
+                      </select>
+                    </div>
+
+                    {/* Font Family */}
+                    <div className="wysiwyg-toolbar-group">
+                      <select
+                        onChange={(e) => { execWysiwyg('fontName', e.target.value); e.target.value = ''; }}
+                        className="wysiwyg-select"
+                        title="Jenis Font"
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Font</option>
+                        <option value="Inter, sans-serif">Inter</option>
+                        <option value="Georgia, serif">Georgia</option>
+                        <option value="'Times New Roman', serif">Times New Roman</option>
+                        <option value="Arial, sans-serif">Arial</option>
+                        <option value="'Courier New', monospace">Courier New</option>
+                        <option value="Verdana, sans-serif">Verdana</option>
+                        <option value="Roboto, sans-serif">Roboto</option>
+                      </select>
+                    </div>
+
+                    {/* Font Size */}
+                    <div className="wysiwyg-toolbar-group">
+                      <select
+                        onChange={(e) => { execWysiwyg('fontSize', e.target.value); e.target.value = ''; }}
+                        className="wysiwyg-select wysiwyg-select-sm"
+                        title="Ukuran Font"
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Size</option>
+                        <option value="1">8pt</option>
+                        <option value="2">10pt</option>
+                        <option value="3">12pt</option>
+                        <option value="4">14pt</option>
+                        <option value="5">18pt</option>
+                        <option value="6">24pt</option>
+                        <option value="7">36pt</option>
+                      </select>
+                    </div>
+
+                    <div className="wysiwyg-divider" />
+
+                    {/* Text Format */}
+                    <div className="wysiwyg-toolbar-group">
+                      <button type="button" onClick={() => execWysiwyg('bold')} className="wysiwyg-btn" title="Tebal (Ctrl+B)"><b>B</b></button>
+                      <button type="button" onClick={() => execWysiwyg('italic')} className="wysiwyg-btn" title="Miring (Ctrl+I)"><i>I</i></button>
+                      <button type="button" onClick={() => execWysiwyg('underline')} className="wysiwyg-btn" title="Garis Bawah (Ctrl+U)"><u>U</u></button>
+                      <button type="button" onClick={() => execWysiwyg('strikeThrough')} className="wysiwyg-btn" title="Coret"><s>S</s></button>
+                    </div>
+
+                    <div className="wysiwyg-divider" />
+
+                    {/* Text Color & Highlight */}
+                    <div className="wysiwyg-toolbar-group">
+                      <label className="wysiwyg-btn wysiwyg-color-btn" title="Warna Teks">
+                        <span style={{ fontWeight: 700, fontSize: '0.75rem', color: '#EF4444' }}>A</span>
+                        <input
+                          type="color"
+                          defaultValue="#EF4444"
+                          style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
+                          onChange={(e) => execWysiwyg('foreColor', e.target.value)}
+                        />
+                      </label>
+                      <label className="wysiwyg-btn wysiwyg-color-btn" title="Sorot Teks">
+                        <span style={{ fontWeight: 700, fontSize: '0.75rem', background: '#FEF08A', padding: '0 2px' }}>H</span>
+                        <input
+                          type="color"
+                          defaultValue="#FEF08A"
+                          style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
+                          onChange={(e) => execWysiwyg('hiliteColor', e.target.value)}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="wysiwyg-divider" />
+
+                    {/* Alignment */}
+                    <div className="wysiwyg-toolbar-group">
+                      <button type="button" onClick={() => execWysiwyg('justifyLeft')} className="wysiwyg-btn" title="Rata Kiri">⬅</button>
+                      <button type="button" onClick={() => execWysiwyg('justifyCenter')} className="wysiwyg-btn" title="Tengah">↔</button>
+                      <button type="button" onClick={() => execWysiwyg('justifyRight')} className="wysiwyg-btn" title="Rata Kanan">➡</button>
+                      <button type="button" onClick={() => execWysiwyg('justifyFull')} className="wysiwyg-btn" title="Rata Penuh">≡</button>
+                    </div>
+
+                    <div className="wysiwyg-divider" />
+
+                    {/* Lists */}
+                    <div className="wysiwyg-toolbar-group">
+                      <button type="button" onClick={() => execWysiwyg('insertUnorderedList')} className="wysiwyg-btn" title="Daftar Poin">• ≡</button>
+                      <button type="button" onClick={() => execWysiwyg('insertOrderedList')} className="wysiwyg-btn" title="Daftar Bernomor">1.</button>
+                      <button type="button" onClick={() => execWysiwyg('outdent')} className="wysiwyg-btn" title="Outdent">⟵</button>
+                      <button type="button" onClick={() => execWysiwyg('indent')} className="wysiwyg-btn" title="Indent">⟶</button>
+                    </div>
+
+                    <div className="wysiwyg-divider" />
+
+                    {/* Insert Blocks */}
+                    <div className="wysiwyg-toolbar-group">
+                      <button
+                        type="button"
+                        onClick={() => insertWysiwygHtml('<blockquote style="border-left:4px solid #FF6600;padding:12px 16px;background:#FFF7ED;color:#9A3412;margin:16px 0;border-radius:0 8px 8px 0;font-style:italic;"><strong>💬 Rekomendasi Insinyur LDP:</strong> "Tuliskan panduan rekayasa di sini..."</blockquote><p><br></p>')}
+                        className="wysiwyg-btn wysiwyg-btn-accent"
+                        title="Sisipkan Kutipan LDP"
+                      >💬</button>
+                      <button
+                        type="button"
+                        onClick={() => insertWysiwygHtml('<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:0.85rem;"><thead><tr style="background:#0B192C;color:#fff;"><th style="padding:8px 12px;border:1px solid #1E293B;text-align:left;">Parameter</th><th style="padding:8px 12px;border:1px solid #1E293B;text-align:left;">Standar</th><th style="padding:8px 12px;border:1px solid #1E293B;text-align:left;">Solusi LDP</th></tr></thead><tbody><tr><td style="padding:8px 12px;border:1px solid #E2E8F0;">Konsumsi Daya</td><td style="padding:8px 12px;border:1px solid #E2E8F0;">0.95 kW/TR</td><td style="padding:8px 12px;border:1px solid #E2E8F0;color:#16A34A;font-weight:700;">0.62 kW/TR</td></tr><tr style="background:#F8FAFC;"><td style="padding:8px 12px;border:1px solid #E2E8F0;">Siklus Aset</td><td style="padding:8px 12px;border:1px solid #E2E8F0;">10–15 Tahun</td><td style="padding:8px 12px;border:1px solid #E2E8F0;color:#16A34A;font-weight:700;">20–25+ Tahun</td></tr></tbody></table><p><br></p>')}
+                        className="wysiwyg-btn wysiwyg-btn-accent"
+                        title="Sisipkan Tabel Komparasi"
+                      >📊</button>
+                      <button
+                        type="button"
+                        onClick={() => insertWysiwygHtml('<hr style="border:none;border-top:2px solid #E2E8F0;margin:20px 0;" /><p><br></p>')}
+                        className="wysiwyg-btn"
+                        title="Garis Pembatas"
+                      >➖</button>
+                    </div>
+
+                    <div className="wysiwyg-divider" />
+
+                    {/* Image Insert */}
+                    <div className="wysiwyg-toolbar-group">
+                      <label
+                        className="wysiwyg-btn wysiwyg-btn-image"
+                        title="Upload & Sisipkan Gambar"
+                        style={{ cursor: 'pointer' }}
+                      >
+                        🖼️
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            handleContentImageFileUpload(e, (base64) => {
+                              insertWysiwygHtml(`<figure style="margin:20px 0;text-align:center;"><img src="${base64}" alt="Ilustrasi Teknis" style="max-width:100%;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,0.12);border:1px solid #E2E8F0;" /><figcaption style="font-size:0.78rem;color:#64748B;margin-top:6px;font-style:italic;">📷 Ilustrasi Teknis</figcaption></figure><p><br></p>`);
+                            });
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = window.prompt('Masukkan URL gambar:');
+                          if (url) {
+                            insertWysiwygHtml(`<figure style="margin:20px 0;text-align:center;"><img src="${url}" alt="Ilustrasi Teknis" style="max-width:100%;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,0.12);border:1px solid #E2E8F0;" /><figcaption style="font-size:0.78rem;color:#64748B;margin-top:6px;font-style:italic;">📷 Ilustrasi Teknis</figcaption></figure><p><br></p>`);
+                          }
+                        }}
+                        className="wysiwyg-btn wysiwyg-btn-image"
+                        title="Sisipkan Gambar dari URL"
+                      >🔗</button>
+                    </div>
+
+                    <div className="wysiwyg-divider" />
+
+                    {/* Undo / Redo */}
+                    <div className="wysiwyg-toolbar-group">
+                      <button type="button" onClick={() => execWysiwyg('undo')} className="wysiwyg-btn" title="Undo (Ctrl+Z)">↩</button>
+                      <button type="button" onClick={() => execWysiwyg('redo')} className="wysiwyg-btn" title="Redo (Ctrl+Y)">↪</button>
+                      <button type="button" onClick={() => execWysiwyg('removeFormat')} className="wysiwyg-btn" title="Hapus Format">✕</button>
+                    </div>
                   </div>
 
-                  {/* Textarea */}
-                  <textarea 
-                    id="admin-article-content-textarea"
-                    required
-                    rows={12}
-                    placeholder="Tulis isi artikel teknis di sini menggunakan Markdown..."
-                    value={articleFormData.content}
-                    onChange={(e) => setArticleFormData({ ...articleFormData, content: e.target.value })}
-                    className="admin-editor-textarea"
+                  {/* WYSIWYG ContentEditable Area */}
+                  <div
+                    ref={wysiwygRef}
+                    id="admin-article-wysiwyg-editor"
+                    contentEditable={true}
+                    suppressContentEditableWarning={true}
+                    onInput={handleWysiwygInput}
+                    onBlur={handleWysiwygInput}
+                    className="wysiwyg-editor-body"
+                    data-placeholder="Mulai menulis konten artikel di sini... Klik toolbar di atas untuk memformat teks, menambah gambar, tabel, dan lainnya."
+                    style={{
+                      minHeight: '380px',
+                      maxHeight: '560px',
+                      overflowY: 'auto',
+                      padding: '18px 20px',
+                      background: '#FFFFFF',
+                      border: '1px solid #CBD5E1',
+                      borderTop: 'none',
+                      borderRadius: '0 0 10px 10px',
+                      outline: 'none',
+                      fontSize: '0.92rem',
+                      lineHeight: 1.8,
+                      color: '#1E293B',
+                      fontFamily: 'Inter, sans-serif',
+                    }}
                   />
 
-                  <div style={{ marginTop: '8px', padding: '10px 14px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                    <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
-                      💡 Tip: Anda dapat beralih ke tab <strong>Pratinjau Live</strong> di kanan atas kapan saja untuk melihat wujud tampilannya saat dibaca klien.
+                  <div style={{ marginTop: '8px', padding: '8px 14px', background: 'rgba(56,189,248,0.06)', borderRadius: '8px', border: '1px solid rgba(56,189,248,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                    <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                      ✨ <strong>WYSIWYG</strong>: Apa yang Anda ketik di sini akan tampil persis sama di website blog.
                     </span>
                     <button 
                       type="button" 
                       onClick={() => setEditorTab('preview')}
                       style={{ background: 'none', border: 'none', color: '#38BDF8', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                     >
-                      <span>Lihat Pratinjau Sekarang</span>
+                      <span>Pratinjau Live</span>
                       <ArrowUpRight size={13} />
                     </button>
                   </div>

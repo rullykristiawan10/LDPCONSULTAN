@@ -633,66 +633,75 @@ export default function BlogPage({ onReturnToSite, onOpenConsultation }) {
             <p>{selectedArticle.summary}</p>
           </div>
 
-          {/* Main Article Content (Rendered Sanitized Markdown) */}
+          {/* Main Article Content - supports both WYSIWYG HTML and legacy Markdown */}
           <div className="blog-content-body" itemProp="articleBody">
-            {sanitizeMarkdownContent(selectedArticle.content).split('\n\n').map((paragraph, index) => {
-              const trimmed = paragraph.trim();
-              if (trimmed.startsWith('### ')) {
-                return (
-                  <h3 key={index} className="blog-content-heading">
-                    {trimmed.replace('### ', '')}
-                  </h3>
-                );
-              }
-              if (trimmed.includes('![') && trimmed.includes('](')) {
-                const imgMatch = trimmed.match(/!\[(.*?)\]\((.*?)\)/);
-                if (imgMatch) {
-                  const alt = imgMatch[1];
-                  const url = imgMatch[2];
-                  const before = trimmed.substring(0, imgMatch.index).trim();
-                  const after = trimmed.substring(imgMatch.index + imgMatch[0].length).trim();
+            {/<[a-z][\s\S]*>/i.test(selectedArticle.content || '') ? (
+              // WYSIWYG HTML content - render directly
+              <div
+                className="blog-wysiwyg-content"
+                dangerouslySetInnerHTML={{ __html: selectedArticle.content || '' }}
+              />
+            ) : (
+              // Legacy Markdown content - parse and render
+              sanitizeMarkdownContent(selectedArticle.content).split('\n\n').map((paragraph, index) => {
+                const trimmed = paragraph.trim();
+                if (trimmed.startsWith('### ')) {
                   return (
-                    <React.Fragment key={index}>
-                      {before && <p className="blog-content-p">{before}</p>}
-                      <figure className="blog-content-figure">
-                        <img 
-                          src={url} 
-                          alt={alt || 'Ilustrasi Teknis LDP'} 
-                          className="blog-content-img" 
-                          loading="lazy"
-                          onError={(e) => { e.target.src = "/images/cad_workstation.jpg"; }}
-                        />
-                        {alt && (
-                          <figcaption className="blog-content-caption">
-                            <ImageIcon className="w-3.5 h-3.5 text-orange-500" />
-                            <span>{alt}</span>
-                          </figcaption>
-                        )}
-                      </figure>
-                      {after && <p className="blog-content-p">{after}</p>}
-                    </React.Fragment>
+                    <h3 key={index} className="blog-content-heading">
+                      {trimmed.replace('### ', '')}
+                    </h3>
                   );
                 }
-              }
-              if (trimmed.startsWith('> ')) {
+                if (trimmed.includes('![') && trimmed.includes('](')) {
+                  const imgMatch = trimmed.match(/!\[(.*?)\]\((.*?)\)/);
+                  if (imgMatch) {
+                    const alt = imgMatch[1];
+                    const url = imgMatch[2];
+                    const before = trimmed.substring(0, imgMatch.index).trim();
+                    const after = trimmed.substring(imgMatch.index + imgMatch[0].length).trim();
+                    return (
+                      <React.Fragment key={index}>
+                        {before && <p className="blog-content-p">{before}</p>}
+                        <figure className="blog-content-figure">
+                          <img 
+                            src={url} 
+                            alt={alt || 'Ilustrasi Teknis LDP'} 
+                            className="blog-content-img" 
+                            loading="lazy"
+                            onError={(e) => { e.target.src = "/images/cad_workstation.jpg"; }}
+                          />
+                          {alt && (
+                            <figcaption className="blog-content-caption">
+                              <ImageIcon className="w-3.5 h-3.5 text-orange-500" />
+                              <span>{alt}</span>
+                            </figcaption>
+                          )}
+                        </figure>
+                        {after && <p className="blog-content-p">{after}</p>}
+                      </React.Fragment>
+                    );
+                  }
+                }
+                if (trimmed.startsWith('> ')) {
+                  return (
+                    <blockquote key={index} className="blog-blockquote">
+                      {trimmed.replace('> ', '').replace(/\*\*/g, '')}
+                    </blockquote>
+                  );
+                }
+                if (trimmed.startsWith('---')) {
+                  return <hr key={index} className="blog-divider" />;
+                }
+                if (trimmed.startsWith('| ')) {
+                  return renderTableBlock(trimmed, index);
+                }
                 return (
-                  <blockquote key={index} className="blog-blockquote">
-                    {trimmed.replace('> ', '').replace(/\*\*/g, '')}
-                  </blockquote>
+                  <p key={index} className="blog-content-p">
+                    {trimmed}
+                  </p>
                 );
-              }
-              if (trimmed.startsWith('---')) {
-                return <hr key={index} className="blog-divider" />;
-              }
-              if (trimmed.startsWith('| ')) {
-                return renderTableBlock(trimmed, index);
-              }
-              return (
-                <p key={index} className="blog-content-p">
-                  {trimmed}
-                </p>
-              );
-            })}
+              })
+            )}
           </div>
 
           {/* Tags Section */}
