@@ -124,10 +124,23 @@ export const getStoredAdminUsers = () => {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map(u => ({
-          ...u,
-          email: u.email || (u.username === 'admin' ? 'admin@ldpconsultant.co.id' : `${u.username}@ldpconsultant.co.id`)
-        }));
+        return parsed.map(u => {
+          let avatar = typeof u.avatar === 'string' ? u.avatar.trim() : '';
+          const isMaster = u.username?.toLowerCase() === 'admin' || u.id === 1;
+          if (isMaster) {
+            if (!avatar || avatar === '/images/admin.jpg' || !avatar.startsWith('/') && !avatar.startsWith('http') && !avatar.startsWith('data:')) {
+              avatar = '/images/avatar_ade.jpg';
+            }
+          } else if (!avatar) {
+            avatar = u.role === 'author' ? '/images/avatar_rizky.jpg' : '/images/avatar_ade.jpg';
+          }
+
+          return {
+            ...u,
+            avatar,
+            email: u.email || (u.username === 'admin' ? 'admin@ldpconsultant.co.id' : `${u.username}@ldpconsultant.co.id`)
+          };
+        });
       }
     }
   } catch (e) {
@@ -2368,12 +2381,6 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                   autoFocus
                 />
               </div>
-              <div className="admin-hint" style={{ fontSize: '0.73rem', color: '#94A3B8', marginTop: '5px', lineHeight: 1.45 }}>
-                Masuk menggunakan email dan password masing-masing akun.<br />
-                <span style={{ color: '#64748B' }}>
-                  Akun awal: <strong>admin@ldpconsultant.co.id</strong> atau <strong>penulis@ldpconsultant.co.id</strong>
-                </span>
-              </div>
             </div>
 
             <div className="admin-form-group">
@@ -4073,12 +4080,14 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
 
                         <td style={{ whiteSpace: 'nowrap' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <img 
-                              src={art.author?.avatar || "/images/avatar_ade.jpg"} 
-                              alt={art.author?.name} 
-                              style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #1E293B', flexShrink: 0 }}
-                              onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
-                            />
+                            <div style={{ width: '28px', height: '28px', minWidth: '28px', minHeight: '28px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '1px solid #E2E8F0', background: '#F1F5F9' }}>
+                              <img 
+                                src={art.author?.avatar || "/images/avatar_ade.jpg"} 
+                                alt={art.author?.name} 
+                                style={{ width: '100%', height: '100%', minWidth: '100%', minHeight: '100%', objectFit: 'cover', display: 'block' }}
+                                onError={(e) => { e.target.onerror = null; e.target.src = "/images/avatar_ade.jpg"; }}
+                              />
+                            </div>
                             <div>
                               <div className="font-bold text-white" style={{ fontSize: '0.78rem' }}>{art.author?.name}</div>
                               <div className="text-sub" style={{ fontSize: '0.7rem' }}>{art.author?.role}</div>
@@ -4567,16 +4576,50 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                       const isSelf = currentUser && currentUser.id === u.id;
                       const userEmail = u.email || (u.username === 'admin' ? 'admin@ldpconsultant.co.id' : `${u.username}@ldpconsultant.co.id`);
 
+                      const defaultFallbackAvatar = (isMasterAdmin || u.role === 'super_admin') 
+                        ? '/images/avatar_ade.jpg' 
+                        : '/images/avatar_rizky.jpg';
+                      const cleanAvatarSrc = (u.avatar && typeof u.avatar === 'string' && u.avatar.trim() && u.avatar !== '/images/admin.jpg')
+                        ? u.avatar.trim()
+                        : defaultFallbackAvatar;
+
                       return (
                         <tr key={u.id}>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              <div style={{ position: 'relative' }}>
+                              <div 
+                                style={{ 
+                                  width: '42px', 
+                                  height: '42px', 
+                                  minWidth: '42px', 
+                                  minHeight: '42px', 
+                                  borderRadius: '50%', 
+                                  overflow: 'hidden', 
+                                  flexShrink: 0, 
+                                  border: '2px solid #E2E8F0', 
+                                  background: '#F1F5F9',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.06)',
+                                  position: 'relative'
+                                }}
+                              >
                                 <img 
-                                  src={u.avatar || "/images/avatar_ade.jpg"} 
+                                  src={cleanAvatarSrc} 
                                   alt={u.fullName} 
-                                  style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #1E293B', flexShrink: 0 }}
-                                  onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
+                                  style={{ 
+                                    width: '100%', 
+                                    height: '100%', 
+                                    minWidth: '100%',
+                                    minHeight: '100%',
+                                    objectFit: 'cover', 
+                                    display: 'block' 
+                                  }}
+                                  onError={(e) => { 
+                                    e.target.onerror = null; 
+                                    e.target.src = defaultFallbackAvatar; 
+                                  }}
                                 />
                               </div>
                               <div>
@@ -7252,12 +7295,14 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 alignItems: 'center',
                 gap: '12px'
               }}>
-                <img 
-                  src={resetPwdTargetUser.avatar || "/images/avatar_ade.jpg"} 
-                  alt={resetPwdTargetUser.fullName}
-                  style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover' }}
-                  onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
-                />
+                <div style={{ width: '38px', height: '38px', minWidth: '38px', minHeight: '38px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '1px solid #CBD5E1', background: '#F1F5F9' }}>
+                  <img 
+                    src={resetPwdTargetUser.avatar || "/images/avatar_ade.jpg"} 
+                    alt={resetPwdTargetUser.fullName}
+                    style={{ width: '100%', height: '100%', minWidth: '100%', minHeight: '100%', objectFit: 'cover', display: 'block' }}
+                    onError={(e) => { e.target.onerror = null; e.target.src = "/images/avatar_ade.jpg"; }}
+                  />
+                </div>
                 <div>
                   <div style={{ fontWeight: 700, color: '#0F172A' }}>{resetPwdTargetUser.fullName}</div>
                   <div style={{ fontSize: '0.72rem', color: '#38BDF8' }}>@{resetPwdTargetUser.username} • {resetPwdTargetUser.role === 'author' ? 'Penulis' : 'Super Admin'}</div>
