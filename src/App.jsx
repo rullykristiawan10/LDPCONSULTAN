@@ -22,7 +22,6 @@ import {
   Download,
   ExternalLink,
   Menu,
-  Calculator,
   ChevronDown,
   Clock,
   ShieldAlert,
@@ -208,10 +207,6 @@ export default function App() {
       setSiteSettings(getStoredSiteSettings());
     }
   }, [isAdminMode]);
-
-  // Calculator State
-  const [calcBuildingType, setCalcBuildingType] = useState('office'); // office, factory, hospital, datacenter, mall
-  const [calcArea, setCalcArea] = useState(1500); // m²
 
   // Scroll listener for back-to-top button
   useEffect(() => {
@@ -448,27 +443,6 @@ export default function App() {
     }
   ];
 
-  // Calculation Logic for Calculator Widget
-  const getCalcResults = () => {
-    let factor = 0.08; // default TR per m² for office
-    let powerFactor = 1.1; // kW per TR
-    
-    if (calcBuildingType === 'factory') { factor = 0.11; powerFactor = 1.3; }
-    else if (calcBuildingType === 'hospital') { factor = 0.12; powerFactor = 1.45; }
-    else if (calcBuildingType === 'datacenter') { factor = 0.22; powerFactor = 1.6; }
-    else if (calcBuildingType === 'mall') { factor = 0.095; powerFactor = 1.25; }
-
-    const tonsRefrigeration = Math.round(calcArea * factor);
-    const estimatedKW = Math.round(tonsRefrigeration * powerFactor);
-    const estimatedMonthlySavings = Math.round(estimatedKW * 24 * 30 * 1500 * 0.22); // 22% energy optimization savings in IDR
-
-    return {
-      tr: tonsRefrigeration,
-      kw: estimatedKW,
-      savingsIDR: estimatedMonthlySavings.toLocaleString('id-ID')
-    };
-  };
-
   // Corporate Clients Data (17 Clients from Company Profile)
   const corporateClients = [
     { name: 'Pupuk Kujang Cikampek', logo: '/images/clients/pupuk_kujang.png', cat: 'Industri Kimia & Pupuk BUMN' },
@@ -489,8 +463,6 @@ export default function App() {
     { name: 'PDG Data Center', logo: '/images/clients/pdg.png', cat: 'Critical Data Center Infrastructure' },
     { name: 'PT Freeport Indonesia', logo: '/images/clients/freeport.png', cat: 'Pertambangan & Industri Berat' }
   ];
-
-  const calcRes = getCalcResults();
 
   if (isAdminMode) {
     return <AdminDashboard onReturnToSite={handleReturnToSite} />;
@@ -545,7 +517,6 @@ export default function App() {
             <li><a href="#beranda" className="nav-link active">Beranda</a></li>
             <li><a href="#profil" className="nav-link">Profil</a></li>
             <li><a href="#layanan" className="nav-link">Layanan</a></li>
-            <li><a href="#kalkulator" className="nav-link">Kalkulator</a></li>
             <li><a href="#portofolio" className="nav-link">Portofolio</a></li>
             <li><a href="#direksi" className="nav-link">Tim</a></li>
             <li><a href="#blog" onClick={() => { setIsBlogMode(true); window.scrollTo({ top: 0 }); }} className="nav-link">Blog</a></li>
@@ -584,10 +555,6 @@ export default function App() {
               </a>
               <a href="#layanan" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">
                 <span>Layanan MEP & HVAC</span>
-                <ChevronRight className="w-4 h-4 mobile-nav-arrow" />
-              </a>
-              <a href="#kalkulator" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">
-                <span>Kalkulator Beban</span>
                 <ChevronRight className="w-4 h-4 mobile-nav-arrow" />
               </a>
               <a href="#portofolio" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">
@@ -983,104 +950,6 @@ export default function App() {
                 </button>
               </div>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* NEW INTERACTIVE CALCULATOR SECTION */}
-      <section id="kalkulator" className="calculator-section">
-        <div className="container">
-          <div className="calculator-card">
-            <div className="calc-header">
-              <div className="section-badge amber">
-                <Calculator className="w-3.5 h-3.5" />
-                <span>INTERACTIVE ESTIMATION TOOL</span>
-              </div>
-              <h2>Kalkulator Beban Pendinginan & Sensitivitas Daya HVAC</h2>
-              <p>Hitung estimasi awal kapasitas pendinginan (Tons of Refrigeration) & proyeksi penghematan daya untuk gedung Anda.</p>
-            </div>
-
-            <div className="calc-grid">
-              {/* Inputs Column */}
-              <div className="calc-inputs">
-                <div className="form-group">
-                  <label className="form-label flex items-center justify-between">
-                    <span>1. Pilih Tipe Bangunan</span>
-                    <span className="text-xs text-orange-600 font-semibold">Standar ASHRAE</span>
-                  </label>
-                  <select 
-                    value={calcBuildingType}
-                    onChange={(e) => setCalcBuildingType(e.target.value)}
-                    className="form-select font-medium"
-                  >
-                    <option value="office">Gedung Perkantoran / Perbankan</option>
-                    <option value="factory">Pabrik & Manufaktur Industri</option>
-                    <option value="hospital">Rumah Sakit & Ruang Cleanroom</option>
-                    <option value="datacenter">Data Center / Server Facility</option>
-                    <option value="mall">Pusat Perbelanjaan / Commercial Mall</option>
-                  </select>
-                </div>
-
-                <div className="form-group mt-6">
-                  <label className="form-label flex items-center justify-between">
-                    <span>2. Luas Total Area Gedung (m²)</span>
-                    <span className="text-sm font-extrabold text-blue-600">{calcArea.toLocaleString()} m²</span>
-                  </label>
-                  <input 
-                    type="range" 
-                    min="100" 
-                    max="15000" 
-                    step="100"
-                    value={calcArea}
-                    onChange={(e) => setCalcArea(Number(e.target.value))}
-                    className="w-full accent-orange-500 cursor-pointer h-2 bg-slate-200 rounded-lg"
-                  />
-                  <div className="flex justify-between text-xs text-slate-400 mt-2 font-semibold">
-                    <span>100 m²</span>
-                    <span>7,500 m²</span>
-                    <span>15,000 m²</span>
-                  </div>
-                </div>
-
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mt-6 text-xs text-amber-900 leading-relaxed flex items-start gap-3">
-                  <Sparkles className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <strong>Perhatian Insinyur:</strong> Perhitungan di atas adalah estimasi awal teknis. Audit termal mendalam (CFD Load Calculation) diperlukan untuk memperhitungkan orientasi kaca, densitas occupants, dan heat gain peralatan.
-                  </div>
-                </div>
-              </div>
-
-              {/* Output Results Card */}
-              <div className="calc-results-box">
-                <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">HASIL ESTIMASI TEKNIS</div>
-                <h4 className="text-lg font-bold text-white mb-6">Proyeksi Sistem HVAC Gedung</h4>
-
-                <div className="space-y-4">
-                  <div className="calc-res-item">
-                    <span className="text-xs text-slate-300">Estimasi Beban Chiller/VRF:</span>
-                    <span className="text-xl font-extrabold text-amber-400">{calcRes.tr} TR <span className="text-xs font-normal text-slate-400">(Tons of Refrigeration)</span></span>
-                  </div>
-
-                  <div className="calc-res-item">
-                    <span className="text-xs text-slate-300">Estimasi Daya Listrik HVAC:</span>
-                    <span className="text-xl font-extrabold text-sky-400">{calcRes.kw} kW <span className="text-xs font-normal text-slate-400">(Electrical Power)</span></span>
-                  </div>
-
-                  <div className="calc-res-item border-t border-slate-700 pt-4">
-                    <span className="text-xs text-slate-300">Potensi Hemat Daya Desain LDP / Bulan:</span>
-                    <span className="text-2xl font-extrabold text-emerald-400">Rp {calcRes.savingsIDR} <span className="text-xs font-normal text-slate-400">/ bln</span></span>
-                  </div>
-                </div>
-
-                <button 
-                  onClick={() => setActiveModal('consultation')}
-                  className="btn-primary w-full justify-center mt-6 text-xs shadow-lg"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>Dapatkan Detail Perhitungan Lengkap</span>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -1489,7 +1358,6 @@ export default function App() {
                 <li><a href="#beranda"><span>Beranda Utama</span></a></li>
                 <li><a href="#profil"><span>Profil Perusahaan</span></a></li>
                 <li><a href="#layanan"><span>Layanan MEP & HVAC</span></a></li>
-                <li><a href="#kalkulator"><span>Kalkulator Beban</span></a></li>
                 <li><a href="#portofolio"><span>Portofolio Proyek</span></a></li>
                 <li><a href="#direksi"><span>Tim & Direksi</span></a></li>
                 <li><a href="#blog" onClick={() => { setIsBlogMode(true); window.scrollTo({ top: 0 }); }}><span>Blog & Artikel Teknik</span></a></li>

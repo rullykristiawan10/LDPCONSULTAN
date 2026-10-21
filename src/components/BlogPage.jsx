@@ -23,7 +23,8 @@ import {
   FileText,
   Eye,
   Mail,
-  X
+  X,
+  Image as ImageIcon
 } from 'lucide-react';
 import './BlogPage.css';
 import { 
@@ -642,6 +643,36 @@ export default function BlogPage({ onReturnToSite, onOpenConsultation }) {
                     {trimmed.replace('### ', '')}
                   </h3>
                 );
+              }
+              if (trimmed.includes('![') && trimmed.includes('](')) {
+                const imgMatch = trimmed.match(/!\[(.*?)\]\((.*?)\)/);
+                if (imgMatch) {
+                  const alt = imgMatch[1];
+                  const url = imgMatch[2];
+                  const before = trimmed.substring(0, imgMatch.index).trim();
+                  const after = trimmed.substring(imgMatch.index + imgMatch[0].length).trim();
+                  return (
+                    <React.Fragment key={index}>
+                      {before && <p className="blog-content-p">{before}</p>}
+                      <figure className="blog-content-figure">
+                        <img 
+                          src={url} 
+                          alt={alt || 'Ilustrasi Teknis LDP'} 
+                          className="blog-content-img" 
+                          loading="lazy"
+                          onError={(e) => { e.target.src = "/images/cad_workstation.jpg"; }}
+                        />
+                        {alt && (
+                          <figcaption className="blog-content-caption">
+                            <ImageIcon className="w-3.5 h-3.5 text-orange-500" />
+                            <span>{alt}</span>
+                          </figcaption>
+                        )}
+                      </figure>
+                      {after && <p className="blog-content-p">{after}</p>}
+                    </React.Fragment>
+                  );
+                }
               }
               if (trimmed.startsWith('> ')) {
                 return (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   BarChart3, 
   Users, 
@@ -259,6 +259,59 @@ const handleImageFileUpload = (e, callback) => {
   };
   reader.readAsDataURL(file);
 };
+
+// Helper to convert and compress content images/diagrams up to 1200px
+const handleContentImageFileUpload = (e, callback, maxDim = 1200) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+
+  if (file.size > 20 * 1024 * 1024) {
+    alert("Ukuran file foto terlalu besar (maksimal 20MB)");
+    e.target.value = '';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Compress to JPEG with 0.85 quality for crisp schematics and diagrams (~80-140KB)
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        callback(compressedDataUrl);
+      } catch (err) {
+        callback(event.target.result);
+      }
+      e.target.value = '';
+    };
+    img.onerror = () => {
+      alert("Format gambar tidak didukung atau file rusak.");
+      e.target.value = '';
+    };
+    img.src = event.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
 
 // Default WhatsApp Contacts
 export const DEFAULT_WA_CONTACTS = [
@@ -936,6 +989,103 @@ export default function AdminDashboard({ onClose, onReturnToSite }) {
 
   const [articleFormData, setArticleFormData] = useState(initialArticleForm);
 
+  // State for Article Content Images (Insert / Edit / Manage)
+  const [contentImageModalOpen, setContentImageModalOpen] = useState(false);
+  const [contentImageForm, setContentImageForm] = useState({
+    url: '',
+    caption: '',
+    isEditingExisting: false,
+    originalMatch: ''
+  });
+
+  const contentImages = useMemo(() => {
+    if (!articleFormData.content) return [];
+    const regex = /!\[(.*?)\]\((.*?)\)/g;
+    const list = [];
+    let match;
+    while ((match = regex.exec(articleFormData.content)) !== null) {
+      list.push({
+        fullMatch: match[0],
+        alt: match[1],
+        url: match[2],
+        index: match.index
+      });
+    }
+    return list;
+  }, [articleFormData.content]);
+
+  const handleOpenAddContentImage = () => {
+    setContentImageForm({
+      url: '',
+      caption: '',
+      isEditingExisting: false,
+      originalMatch: ''
+    });
+    setContentImageModalOpen(true);
+  };
+
+  const handleOpenEditContentImage = (imgItem) => {
+    setContentImageForm({
+      url: imgItem.url,
+      caption: imgItem.alt,
+      isEditingExisting: true,
+      originalMatch: imgItem.fullMatch
+    });
+    setContentImageModalOpen(true);
+  };
+
+  const handleSaveContentImageSubmit = (e) => {
+    e.preventDefault();
+    if (!contentImageForm.url.trim()) {
+      alert("Harap pilih atau masukkan gambar terlebih dahulu!");
+      return;
+    }
+    const cleanCaption = contentImageForm.caption.trim() || 'Ilustrasi Teknis';
+    const cleanUrl = contentImageForm.url.trim();
+    const newMarkdown = `![${cleanCaption}](${cleanUrl})`;
+
+    if (contentImageForm.isEditingExisting && contentImageForm.originalMatch) {
+      const updatedContent = articleFormData.content.replace(contentImageForm.originalMatch, newMarkdown);
+      setArticleFormData(prev => ({ ...prev, content: updatedContent }));
+      setArticleToast('Gambar dalam konten artikel berhasil diperbarui!');
+    } else {
+      const textarea = document.getElementById('admin-article-content-textarea');
+      if (textarea) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const before = textarea.value.substring(0, start);
+        const after = textarea.value.substring(end);
+        const insertText = `\n\n${newMarkdown}\n`;
+        const updated = before + insertText + after;
+        setArticleFormData(prev => ({ ...prev, content: updated }));
+      } else {
+        setArticleFormData(prev => ({ ...prev, content: `${prev.content}\n\n${newMarkdown}\n` }));
+      }
+      setArticleToast('Gambar berhasil disisipkan ke dalam konten artikel!');
+    }
+
+    setContentImageModalOpen(false);
+    setTimeout(() => setArticleToast(''), 4000);
+  };
+
+  const handleDeleteContentImage = (imgItem) => {
+    if (window.confirm(`Hapus gambar "${imgItem.alt || 'ini'}" dari konten artikel?`)) {
+      const updated = articleFormData.content.replace(imgItem.fullMatch, '').replace(/\n{3,}/g, '\n\n');
+      setArticleFormData(prev => ({ ...prev, content: updated }));
+      setArticleToast('Gambar berhasil dihapus dari konten.');
+      setTimeout(() => setArticleToast(''), 3000);
+    }
+  };
+
+  const handleDirectSwapContentImage = (imgItem, newUrl) => {
+    const newMarkdown = `![${imgItem.alt}](${newUrl})`;
+    const updated = articleFormData.content.replace(imgItem.fullMatch, newMarkdown);
+    setArticleFormData(prev => ({ ...prev, content: updated }));
+    setArticleToast('Foto gambar konten berhasil diganti!');
+    setTimeout(() => setArticleToast(''), 3000);
+  };
+
+
   // Sync Articles with Storage
   useEffect(() => {
     const handleSyncArticles = () => {
@@ -1307,6 +1457,52 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
     return blocks.map((block, idx) => {
       const trimmed = block.trim();
       if (!trimmed) return null;
+
+      // Handle Markdown Images: ![alt](url)
+      if (trimmed.includes('![') && trimmed.includes('](')) {
+        const imgMatch = trimmed.match(/!\[(.*?)\]\((.*?)\)/);
+        if (imgMatch) {
+          const alt = imgMatch[1];
+          const url = imgMatch[2];
+          const before = trimmed.substring(0, imgMatch.index).trim();
+          const after = trimmed.substring(imgMatch.index + imgMatch[0].length).trim();
+          return (
+            <React.Fragment key={idx}>
+              {before && (
+                <p style={{ fontSize: '0.88rem', color: '#334155', lineHeight: 1.7, marginBottom: '14px' }}>
+                  {before}
+                </p>
+              )}
+              <figure style={{ margin: '24px 0', textAlign: 'center' }}>
+                <img 
+                  src={url} 
+                  alt={alt} 
+                  style={{ 
+                    maxWidth: '100%', 
+                    maxHeight: '480px',
+                    borderRadius: '12px', 
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)', 
+                    objectFit: 'cover',
+                    border: '1px solid #E2E8F0',
+                    display: 'inline-block'
+                  }} 
+                  onError={(e) => { e.target.src = "/images/cad_workstation.jpg"; }}
+                />
+                {alt && (
+                  <figcaption style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '8px', fontStyle: 'italic' }}>
+                    📷 {alt}
+                  </figcaption>
+                )}
+              </figure>
+              {after && (
+                <p style={{ fontSize: '0.88rem', color: '#334155', lineHeight: 1.7, marginBottom: '14px' }}>
+                  {after}
+                </p>
+              )}
+            </React.Fragment>
+          );
+        }
+      }
 
       if (trimmed.startsWith('### ')) {
         return <h3 key={idx}>{trimmed.replace('### ', '')}</h3>;
@@ -2130,10 +2326,14 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
     return (
       <div className="admin-login-screen">
         <div className="admin-login-card">
-          <div className="admin-login-logo">
-            <div className="admin-logo-box">LDP</div>
+          <div className="admin-login-logo" style={{ marginBottom: '20px' }}>
+            <img 
+              src="/images/ldp_logo_white.png" 
+              alt="PT Lentang Duta Perkasa - LDP Technical Consultant" 
+              style={{ height: '48px', width: 'auto', objectFit: 'contain', margin: '0 auto' }} 
+            />
           </div>
-          <h2 className="admin-login-title">Portal Keamanan Admin</h2>
+          <h2 className="admin-login-title" style={{ fontFamily: "var(--font-display, 'Outfit', sans-serif)" }}>Portal Keamanan Admin</h2>
           <p className="admin-login-subtitle">PT LENTANG Duta Perkasa — LDP Technical Consultant</p>
 
           {isLocked && (
@@ -2254,12 +2454,22 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
       <aside className="admin-sidebar">
         <div className="admin-sidebar-top">
           {/* Brand Header */}
-          <div className="admin-brand-header">
-            <div className="admin-brand-icon">LDP</div>
-            <div className="admin-brand-text">
-              <span className="admin-brand-title">LDP CONSULTANT</span>
-              <span className="admin-brand-sub">ADMIN PORTAL</span>
-            </div>
+          <div className="admin-brand-header" style={{ paddingBottom: '18px', borderBottom: '1px solid #F1F5F9', marginBottom: '24px' }}>
+            <a 
+              href="#" 
+              onClick={(e) => { e.preventDefault(); onReturnToSite(); }} 
+              style={{ display: 'flex', flexDirection: 'column', gap: '8px', textDecoration: 'none' }}
+              title="Klik untuk kembali ke beranda website"
+            >
+              <img 
+                src="/images/ldp_logo_white.png" 
+                alt="PT Lentang Duta Perkasa" 
+                style={{ height: '36px', width: 'auto', objectFit: 'contain' }}
+              />
+              <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#FF6600', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                ADMIN & EDITORIAL PORTAL
+              </span>
+            </a>
           </div>
 
           {/* Navigation Links */}
@@ -2296,16 +2506,6 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                     <span>Portofolio Proyek</span>
                   </div>
                   <span className="admin-count-pill blue">{projectsList.length}</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('calculator')}
-                  className={`admin-nav-item ${activeTab === 'calculator' ? 'active' : ''}`}
-                >
-                  <div className="admin-nav-left">
-                    <Calculator size={18} />
-                    <span>Log Kalkulator HVAC</span>
-                  </div>
                 </button>
 
                 <button
@@ -2392,7 +2592,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 background: 'rgba(255, 102, 0, 0.08)',
                 border: '1px solid rgba(255, 102, 0, 0.25)',
                 fontSize: '0.73rem',
-                color: '#CBD5E1',
+                color: '#64748B',
                 lineHeight: 1.5
               }}>
                 <div style={{ fontWeight: 700, color: '#FF8800', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
@@ -2461,7 +2661,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
               title="Klik untuk mengedit foto & profil akun Anda"
             >
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#FFFFFF', lineHeight: 1.2 }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F172A', lineHeight: 1.2 }}>
                   {currentUser?.fullName || (currentUser?.role === 'author' ? 'Penulis Artikel' : 'Administrator')}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end', marginTop: '3px' }}>
@@ -3173,14 +3373,15 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                       key={contact.id} 
                       className={`admin-wa-card ${contact.active === false ? 'disabled' : ''}`}
                       style={{
-                        background: '#040E1C',
-                        border: '1px solid #1E293B',
+                        background: '#FFFFFF',
+                        border: '1px solid #E2E8F0',
                         borderRadius: '12px',
                         padding: '16px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         gap: '12px',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
                         opacity: contact.active === false ? 0.6 : 1
                       }}
                     >
@@ -3214,12 +3415,12 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                         )}
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <h4 style={{ margin: 0, color: '#FFFFFF', fontSize: '0.95rem', fontWeight: 600 }}>{contact.name}</h4>
+                            <h4 style={{ margin: 0, color: '#0F172A', fontSize: '0.95rem', fontWeight: 700 }}>{contact.name}</h4>
                             <span className={`admin-status-tag ${contact.active !== false ? 'green' : 'orange'}`} style={{ fontSize: '0.7rem' }}>
                               {contact.active !== false ? 'Aktif' : 'Non-Aktif'}
                             </span>
                           </div>
-                          <p style={{ margin: '2px 0 4px', color: '#38BDF8', fontSize: '0.8rem' }}>{contact.role}</p>
+                          <p style={{ margin: '2px 0 4px', color: '#0284C7', fontSize: '0.8rem', fontWeight: 600 }}>{contact.role}</p>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#94A3B8', fontSize: '0.78rem' }}>
                             <Phone size={13} className="text-green" />
                             <span>+{contact.phone}</span>
@@ -3315,12 +3516,12 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
 
                 {/* SIMULATED WIDGET POPUP */}
                 <div style={{ 
-                  background: '#040E1C', 
-                  border: '1px solid #1E293B', 
+                  background: '#FFFFFF', 
+                  border: '1px solid #E2E8F0', 
                   borderRadius: '16px', 
                   overflow: 'hidden', 
                   marginTop: '16px',
-                  boxShadow: '0 10px 30px rgba(0,0,0,0.5)' 
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.08)' 
                 }}>
                   {/* Simulated Header */}
                   <div style={{ 
@@ -3343,10 +3544,11 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                   </div>
 
                   {/* Simulated Body Contacts */}
-                  <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', background: '#0F172A' }}>
+                  <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', background: '#FFFFFF' }}>
                     {waContacts.filter(c => c.active !== false).map(c => (
                       <div key={c.id} style={{ 
-                        background: '#1E293B', 
+                        background: '#F8FAFC', 
+                        border: '1px solid #E2E8F0',
                         padding: '10px 12px', 
                         borderRadius: '10px', 
                         display: 'flex', 
@@ -3381,7 +3583,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                             </div>
                           )}
                           <div>
-                            <div style={{ color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 600 }}>{c.name}</div>
+                            <div style={{ color: '#0F172A', fontSize: '0.82rem', fontWeight: 700 }}>{c.name}</div>
                             <div style={{ color: '#94A3B8', fontSize: '0.72rem' }}>{c.role}</div>
                           </div>
                         </div>
@@ -4407,12 +4609,13 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
 
                           <td>
                             <code style={{ 
-                              background: '#040E1C', 
+                              background: '#F1F5F9', 
                               padding: '3px 8px', 
                               borderRadius: '6px', 
-                              color: '#94A3B8', 
+                              color: '#0F172A', 
                               fontSize: '0.78rem',
-                              border: '1px solid #1E293B'
+                              border: '1px solid #E2E8F0',
+                              fontWeight: 600
                             }}>
                               @{u.username}
                             </code>
@@ -5156,7 +5359,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
 
                   <div className="admin-form-group">
                     <label className="admin-label">Slug URL Website (SEO Friendly)</label>
-                    <div style={{ display: 'flex', alignItems: 'center', background: '#040E1C', border: '1px solid #1E293B', borderRadius: '10px', padding: '0 12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '10px', padding: '0 12px' }}>
                       <span style={{ fontSize: '0.78rem', color: '#64748B', whiteSpace: 'nowrap' }}>#blog/</span>
                       <input 
                         type="text" 
@@ -5209,14 +5412,14 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                       display: 'flex',
                       alignItems: 'center',
                       gap: '14px',
-                      background: '#040E1C',
-                      border: '1px solid #1E293B',
+                      background: '#F8FAFC',
+                      border: '1px solid #CBD5E1',
                       borderRadius: '12px',
                       padding: '8px 14px',
                       minHeight: '44px',
                       flexWrap: 'wrap'
                     }}>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.82rem', color: '#FFFFFF', fontWeight: 600 }}>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.82rem', color: '#0F172A', fontWeight: 600 }}>
                         <input 
                           type="checkbox" 
                           checked={articleFormData.featured}
@@ -5506,6 +5709,20 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                     >
                       <span>🏢 Studi Kasus ROI</span>
                     </button>
+                    <button 
+                      type="button" 
+                      onClick={handleOpenAddContentImage}
+                      className="admin-tool-btn"
+                      title="Sisipkan atau unggah gambar baru ke dalam konten artikel"
+                      style={{ 
+                        background: 'linear-gradient(135deg, rgba(255,102,0,0.2) 0%, rgba(255,102,0,0.3) 100%)', 
+                        borderColor: '#FF6600', 
+                        color: '#FFB088',
+                        fontWeight: 700
+                      }}
+                    >
+                      <span>🖼️ Sisipkan Gambar</span>
+                    </button>
                   </div>
 
                   {/* Textarea */}
@@ -5519,8 +5736,8 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                     className="admin-editor-textarea"
                   />
 
-                  <div style={{ marginTop: '8px', padding: '10px 14px', background: '#040E1C', borderRadius: '8px', border: '1px solid #1E293B', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                    <span style={{ fontSize: '0.74rem', color: '#94A3B8' }}>
+                  <div style={{ marginTop: '8px', padding: '10px 14px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                    <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
                       💡 Tip: Anda dapat beralih ke tab <strong>Pratinjau Live</strong> di kanan atas kapan saja untuk melihat wujud tampilannya saat dibaca klien.
                     </span>
                     <button 
@@ -5531,6 +5748,125 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                       <span>Lihat Pratinjau Sekarang</span>
                       <ArrowUpRight size={13} />
                     </button>
+                  </div>
+
+                  {/* Visual Content Image Editor & Gallery */}
+                  <div className="admin-content-images-manager" style={{ marginTop: '16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ background: 'rgba(255,102,0,0.15)', padding: '5px', borderRadius: '8px', color: '#FF6600', display: 'flex' }}>
+                          <ImageIcon size={16} />
+                        </div>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '0.84rem', color: '#0F172A', fontWeight: 700 }}>
+                            Gambar Dalam Konten Artikel ({contentImages.length})
+                          </h4>
+                          <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
+                            Kelola, edit keterangan, ganti foto, atau hapus gambar yang disisipkan di dalam artikel
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleOpenAddContentImage}
+                        className="admin-btn-primary"
+                        style={{ padding: '6px 12px', fontSize: '0.76rem', gap: '6px' }}
+                      >
+                        <Plus size={14} />
+                        <span>Tambah Gambar Konten</span>
+                      </button>
+                    </div>
+
+                    {contentImages.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '18px 12px', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '8px', border: '1px dashed #334155' }}>
+                        <p style={{ margin: '0 0 6px', fontSize: '0.78rem', color: '#94A3B8' }}>
+                          Belum ada gambar yang disisipkan di dalam teks artikel.
+                        </p>
+                        <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748B' }}>
+                          Tambahkan skema sistem HVAC, denah MEP, grafik efisiensi, atau foto lapangan untuk memperkaya visual artikel teknis Anda.
+                        </p>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '12px' }}>
+                        {contentImages.map((imgItem, idx) => (
+                          <div 
+                            key={idx}
+                            style={{ 
+                              background: '#0B192C', 
+                              border: '1px solid #1E293B', 
+                              borderRadius: '10px', 
+                              padding: '10px', 
+                              display: 'flex', 
+                              flexDirection: 'column', 
+                              gap: '8px',
+                              position: 'relative'
+                            }}
+                          >
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                              <div style={{ width: '70px', height: '54px', borderRadius: '6px', overflow: 'hidden', background: '#000', flexShrink: 0, border: '1px solid #334155' }}>
+                                <img 
+                                  src={imgItem.url} 
+                                  alt={imgItem.alt || 'Gambar Konten'} 
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  onError={(e) => { e.target.src = "/images/cad_workstation.jpg"; }}
+                                />
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                                  <span style={{ fontSize: '0.65rem', background: 'rgba(255,102,0,0.18)', color: '#FF8533', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                    Gambar #{idx + 1}
+                                  </span>
+                                </div>
+                                <p style={{ margin: 0, fontSize: '0.75rem', color: '#E2E8F0', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={imgItem.alt}>
+                                  {imgItem.alt || '(Tanpa Keterangan)'}
+                                </p>
+                                <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={imgItem.url}>
+                                  {imgItem.url.startsWith('data:') ? 'Foto Upload (Base64)' : imgItem.url}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', borderTop: '1px solid #1E293B', paddingTop: '8px' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditContentImage(imgItem)}
+                                className="admin-btn-secondary"
+                                style={{ flex: 1, padding: '5px 8px', fontSize: '0.72rem', justifyContent: 'center', gap: '4px' }}
+                                title="Edit keterangan atau ganti URL gambar"
+                              >
+                                <Edit size={12} />
+                                <span>Edit Detail</span>
+                              </button>
+
+                              <label
+                                className="admin-btn-secondary"
+                                style={{ padding: '5px 8px', fontSize: '0.72rem', cursor: 'pointer', gap: '4px', display: 'inline-flex', alignItems: 'center' }}
+                                title="Ganti foto langsung dari komputer"
+                              >
+                                <Upload size={12} />
+                                <span>Ganti</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  style={{ display: 'none' }}
+                                  onChange={(e) => handleContentImageFileUpload(e, (base64) => handleDirectSwapContentImage(imgItem, base64))}
+                                />
+                              </label>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteContentImage(imgItem)}
+                                style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#F87171', borderRadius: '6px', padding: '5px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                title="Hapus gambar dari konten artikel"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -5708,8 +6044,8 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
             ) : (
               /* TAB 2: LIVE PREVIEW */
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#040E1C', padding: '10px 16px', borderRadius: '10px', border: '1px solid #1E293B' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#CBD5E1' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F8FAFC', padding: '10px 16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#334155' }}>
                     <Sparkles size={16} className="text-orange" />
                     <span>Ini adalah pratinjau nyata dari artikel saat dibuka oleh pengunjung di <strong>#blog/{articleFormData.slug || 'slug'}</strong></span>
                   </div>
@@ -5815,6 +6151,180 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
           </div>
         </div>
       )}
+
+      {/* MODAL SISIPKAN / EDIT GAMBAR KONTEN ARTIKEL */}
+      {contentImageModalOpen && (
+        <div className="admin-modal-overlay" style={{ zIndex: 10005 }}>
+          <div className="admin-modal-card" style={{ maxWidth: '560px' }}>
+            <div className="admin-modal-header" style={{ paddingBottom: '14px', borderBottom: '1px solid #1E293B' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ background: 'rgba(255,102,0,0.15)', padding: '6px', borderRadius: '10px', color: '#FF6600' }}>
+                  <ImageIcon size={20} />
+                </div>
+                <div>
+                  <h3 className="admin-modal-title">
+                    {contentImageForm.isEditingExisting ? 'Edit Gambar Konten' : 'Sisipkan Gambar ke Konten'}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.74rem', color: '#94A3B8' }}>
+                    Unggah diagram, skema denah, foto instalasi, atau gunakan URL eksternal
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setContentImageModalOpen(false)} 
+                className="admin-modal-close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveContentImageSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Preview Gambar */}
+              {contentImageForm.url ? (
+                <div style={{ position: 'relative', width: '100%', height: '180px', borderRadius: '12px', overflow: 'hidden', border: '2px solid #FF6600', background: '#000' }}>
+                  <img 
+                    src={contentImageForm.url} 
+                    alt="Preview" 
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    onError={(e) => { e.target.src = "/images/office_presentation.jpg"; }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setContentImageForm(prev => ({ ...prev, url: '' }))}
+                    style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.7)', border: 'none', color: '#FFF', borderRadius: '50%', width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                    title="Ganti Foto"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div style={{ border: '2px dashed #334155', borderRadius: '12px', padding: '24px 16px', textAlign: 'center', background: 'rgba(15,23,42,0.4)' }}>
+                  <ImageIcon size={32} style={{ color: '#64748B', margin: '0 auto 8px' }} />
+                  <p style={{ margin: '0 0 10px', fontSize: '0.82rem', color: '#94A3B8' }}>
+                    Pilih file gambar beresolusi tinggi dari komputer Anda
+                  </p>
+                  <label 
+                    className="admin-btn-primary" 
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '8px 16px', fontSize: '0.8rem' }}
+                  >
+                    <Upload size={14} />
+                    <span>Upload Foto / Skema Teknis</span>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      style={{ display: 'none' }}
+                      onChange={(e) => handleContentImageFileUpload(e, (base64) => setContentImageForm(prev => ({ ...prev, url: base64 })))}
+                    />
+                  </label>
+                  <p style={{ margin: '8px 0 0', fontSize: '0.7rem', color: '#64748B' }}>
+                    Mendukung JPG, PNG, WEBP, SVG (Otomatis dioptimasi hingga 1200px)
+                  </p>
+                </div>
+              )}
+
+              {/* Input URL Alternatif */}
+              <div className="admin-form-group">
+                <label className="admin-label">Atau Ketik / Tempel URL Gambar</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input 
+                    type="text" 
+                    placeholder="https://... atau /images/nama_foto.jpg"
+                    value={contentImageForm.url}
+                    onChange={(e) => setContentImageForm(prev => ({ ...prev, url: e.target.value }))}
+                    className="admin-input"
+                    style={{ fontSize: '0.78rem' }}
+                  />
+                  <label 
+                    className="admin-btn-secondary" 
+                    style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '8px 12px', fontSize: '0.76rem', whiteSpace: 'nowrap' }}
+                  >
+                    <Upload size={13} />
+                    <span>Upload</span>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      style={{ display: 'none' }}
+                      onChange={(e) => handleContentImageFileUpload(e, (base64) => setContentImageForm(prev => ({ ...prev, url: base64 })))}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Preset Gambar Teknis Cepat */}
+              <div className="admin-form-group">
+                <label className="admin-label" style={{ fontSize: '0.74rem' }}>Preset Gambar Proyek Cepat</label>
+                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                  {PRESET_ARTICLE_COVERS.map((preset, pIdx) => (
+                    <button
+                      key={pIdx}
+                      type="button"
+                      onClick={() => setContentImageForm(prev => ({ 
+                        ...prev, 
+                        url: preset.url,
+                        caption: prev.caption || preset.label
+                      }))}
+                      style={{
+                        background: '#040E1C',
+                        border: contentImageForm.url === preset.url ? '2px solid #FF6600' : '1px solid #1E293B',
+                        borderRadius: '8px',
+                        padding: '4px',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                        textAlign: 'left',
+                        width: '100px'
+                      }}
+                    >
+                      <img src={preset.url} alt={preset.label} style={{ width: '100%', height: '50px', objectFit: 'cover', borderRadius: '4px' }} />
+                      <span style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'block', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {preset.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Keterangan / Caption Gambar */}
+              <div className="admin-form-group">
+                <label className="admin-label">
+                  Keterangan Gambar / Caption (Alt Text) <span style={{ color: '#FF6600' }}>*</span>
+                </label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Contoh: Diagram Alir Sistem Tata Udara & Chiller Plant Sentral"
+                  value={contentImageForm.caption}
+                  onChange={(e) => setContentImageForm(prev => ({ ...prev, caption: e.target.value }))}
+                  className="admin-input"
+                />
+                <p className="admin-hint" style={{ fontSize: '0.7rem' }}>
+                  Keterangan ini akan tampil di bawah gambar artikel serta membantu indeks Google Image SEO.
+                </p>
+              </div>
+
+              {/* Footer */}
+              <div className="admin-modal-footer" style={{ borderTop: '1px solid #1E293B', paddingTop: '14px', marginTop: '4px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setContentImageModalOpen(false)}
+                  className="admin-btn-secondary"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit" 
+                  className="admin-btn-primary"
+                  style={{ minWidth: '150px', justifyContent: 'center' }}
+                >
+                  <Check size={15} />
+                  <span>{contentImageForm.isEditingExisting ? 'Simpan Perubahan' : 'Sisipkan ke Konten'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
 
       {/* ARTICLE PREVIEW MODAL (FULL VIEWER) */}
       {previewingArticle && (
@@ -6006,7 +6516,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 />
               </div>
 
-              <div className="admin-modal-footer" style={{ borderTop: '1px solid #1E293B', paddingTop: '16px', marginTop: '16px' }}>
+              <div className="admin-modal-footer" style={{ borderTop: '1px solid #E2E8F0', paddingTop: '16px', marginTop: '16px' }}>
                 <button 
                   type="button" 
                   onClick={() => setShowEditSettingsModal(false)}
@@ -6486,12 +6996,12 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '12px 16px',
-                background: '#040E1C',
+                background: '#F8FAFC',
                 borderRadius: '10px',
-                border: '1px solid #1E293B'
+                border: '1px solid #E2E8F0'
               }}>
                 <div>
-                  <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#FFFFFF' }}>Izinkan Akun Ini Login</div>
+                  <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0F172A' }}>Izinkan Akun Ini Login</div>
                   <div style={{ fontSize: '0.72rem', color: '#94A3B8' }}>Jika dinonaktifkan, akun tidak dapat masuk ke portal admin</div>
                 </div>
                 <input 
@@ -6733,11 +7243,11 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
             <form onSubmit={handleSaveResetUserPasswordSubmit} className="admin-modal-body space-y">
               <div style={{
                 padding: '12px 14px',
-                background: '#040E1C',
+                background: '#F8FAFC',
                 borderRadius: '10px',
-                border: '1px solid #1E293B',
+                border: '1px solid #E2E8F0',
                 fontSize: '0.8rem',
-                color: '#CBD5E1',
+                color: '#334155',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px'
@@ -6749,7 +7259,7 @@ Melalui pendekatan rekayasa yang komprehensif, efisiensi operasional gedung dapa
                   onError={(e) => { e.target.src = "/images/avatar_ade.jpg"; }}
                 />
                 <div>
-                  <div style={{ fontWeight: 700, color: '#FFFFFF' }}>{resetPwdTargetUser.fullName}</div>
+                  <div style={{ fontWeight: 700, color: '#0F172A' }}>{resetPwdTargetUser.fullName}</div>
                   <div style={{ fontSize: '0.72rem', color: '#38BDF8' }}>@{resetPwdTargetUser.username} • {resetPwdTargetUser.role === 'author' ? 'Penulis' : 'Super Admin'}</div>
                 </div>
               </div>
