@@ -557,7 +557,7 @@ export const DEFAULT_SITE_SETTINGS = {
   expert_supervision: "Sertifikat SKA Utama MEP",
   hotline: "+62 838-7407-8144",
   email: "consultant@ldpgroup.co.id",
-  address: "Menara Batavia Lt. 12, Jl. K.H. Mas Mansyur Kav. 126, Jakarta Pusat"
+  address: "Jl. Komplek Pesona Bali City View Residence Desa Cigugur Girang, Kec.Parongpong, Bandung Barat, Jawa Barat 40559"
 };
 
 export const getStoredSiteSettings = () => {
@@ -565,7 +565,15 @@ export const getStoredSiteSettings = () => {
     const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed && typeof parsed === 'object') return { ...DEFAULT_SITE_SETTINGS, ...parsed };
+      if (parsed && typeof parsed === 'object') {
+        if (!parsed.address || parsed.address.includes('Menara Batavia') || parsed.address.includes('Tangerang Selatan')) {
+          parsed.address = DEFAULT_SITE_SETTINGS.address;
+          try {
+            localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify({ ...DEFAULT_SITE_SETTINGS, ...parsed }));
+          } catch (e) {}
+        }
+        return { ...DEFAULT_SITE_SETTINGS, ...parsed };
+      }
     }
   } catch (e) {
     console.error("Error reading site settings from localStorage:", e);

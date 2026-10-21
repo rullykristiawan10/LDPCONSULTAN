@@ -430,10 +430,6 @@ export default function App() {
       a: "Tergantung pada skala dan kompleksitas proyek. Untuk gedung perkantoran atau komersial menengah (5.000 - 15.000 m²), konsep awal dan perhitungan BoQ umumnya diselesaikan dalam waktu 10-14 hari kerja."
     },
     {
-      q: "Apakah PT Lentang Duta Perkasa terverifikasi secara hukum di Indonesia?",
-      a: "Ya. Kami terdaftar resmi di OSS Kementerian Investasi RI dengan NIB 0129116242975 dan memiliki sertifikasi manajemen mutu ISO 9001:2015 serta ISO 45001:2018 (K3). Seluruh insinyur kami memegang sertifikasi keahlian STRA / SKA LPJK Utama."
-    },
-    {
       q: "Apakah LDP Consultant melayani proyek di luar wilayah Jabodetabek?",
       a: "Tentu saja. Portofolio kami mencakup proyek-proyek strategis di seluruh Indonesia, seperti Pembangkit Panas Bumi di Sumatera Barat hingga Kompleks Fasilitas Freeport di Timika, Papua."
     },
@@ -1371,9 +1367,6 @@ export default function App() {
               <ul className="footer-links">
                 <li><a href="#layanan"><span>Spesialis Chiller & VRF</span></a></li>
                 <li><a href="#profil"><span>Audit Termal Aliran CFD</span></a></li>
-                <li><a href="#profil"><span>Sertifikasi ISO 9001:2015</span></a></li>
-                <li><a href="#profil"><span>Sertifikasi ISO 45001:2018</span></a></li>
-                <li><a href="#profil"><span>Sertifikasi STRA / SKA Utama</span></a></li>
                 <li><a href="#profil"><span>Standar ASHRAE & SNI</span></a></li>
               </ul>
             </div>
@@ -1385,8 +1378,15 @@ export default function App() {
                 <li className="footer-contact-item">
                   <MapPin className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    <strong className="text-white block font-semibold mb-0.5">Indonesia Head Office:</strong>
-                    <span>{siteSettings.address || 'Tangerang Selatan, Banten - Indonesia'}</span>
+                    <strong className="text-white block font-semibold mb-1">PT Lentera Duta Persada</strong>
+                    <div className="text-slate-300 text-xs leading-relaxed">
+                      <span className="text-slate-400 block mb-0.5">alamat :</span>
+                      <span>
+                        {siteSettings.address && !siteSettings.address.includes('Menara Batavia') && !siteSettings.address.includes('Tangerang Selatan')
+                          ? siteSettings.address
+                          : 'Jl. Komplek Pesona Bali City View Residence Desa Cigugur Girang, Kec.Parongpong, Bandung Barat, Jawa Barat 40559'}
+                      </span>
+                    </div>
                   </div>
                 </li>
                 <li className="footer-contact-item">
