@@ -1,5 +1,5 @@
 -- =====================================================================
--- PT LENTANG DUTA PERKASA (LDP Technical Consultant - MW Group)
+-- PT LENTERA DUTA PERSADA (LDP Technical Consultant - MW Group)
 -- Supabase Database Schema
 -- =====================================================================
 
@@ -300,6 +300,39 @@ VALUES
   '766a1ac91dc2c3a86c8f2d826ae02f75de2d7c66f3d23dab797b21c314a37d91',
   'Engineering Director / Lead Author',
   '/images/avatar_rizky.jpg',
+  true
+),
+(
+  3,
+  'nabila',
+  'nabila.fitri.tptu24@polban.ac.id',
+  'Nabila Fitri',
+  'author',
+  '9bd74725c0761da15150c5747aa1eec51ab70796258ffe57be93ff2b5230c6b3',
+  'Consultant Engineer & Technical Author',
+  '/images/avatar_ade.jpg',
+  true
+),
+(
+  4,
+  'nandita',
+  'nandita.nurhidayah.tptu24@polban.ac.id',
+  'Nandita Nurhidayah',
+  'author',
+  'cd06be60f35665067a8c5ebe2f79542c4fa2dce2b7ba82e1d57349c20e46d61c',
+  'Consultant Engineer & Technical Author',
+  '/images/avatar_ade.jpg',
+  true
+),
+(
+  5,
+  'aprillia',
+  'aprillia.mutia.tptu24@polban.ac.id',
+  'Aprillia Mutia',
+  'author',
+  'cf82ac5ac181ce4d4cdb17700d013e61e7d84de7bc748c23bb2c05af1f2e08b1',
+  'Consultant Engineer & Technical Author',
+  '/images/avatar_ade.jpg',
   true
 )
 ON CONFLICT (username) DO UPDATE SET

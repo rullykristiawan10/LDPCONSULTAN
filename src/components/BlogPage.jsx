@@ -60,7 +60,7 @@ export const INITIAL_BLOG_ARTICLES = [
 ### Latar Belakang: Beban Operasional HVAC pada Gedung Komersial
 Dalam gedung perkantoran, pusat perbelanjaan, maupun fasilitas industri di Indonesia, beban operasional sistem pendingin udara (HVAC) menyumbang antara **45% hingga 65% dari total tagihan listrik bulanan**. Sebagian besar gedung mengalami inefisiensi akibat ketidaktepatan *sizing* chiller, sistem pemompaan tanpa VFD (*Variable Frequency Drive*), serta delta T (*temperature difference*) yang rendah (*Low Delta T Syndrome*).
 
-Dengan menerapkan metodologi audit energi berstandar **ASHRAE 90.1 & SNI 6389**, konsultan teknik PT LENTANG Duta Perkasa mampu mengidentifikasi titik kebocoran energi dan merancang perbaikan sistem hidronik yang memberikan *Return on Investment (ROI)* di bawah 2 tahun.
+Dengan menerapkan metodologi audit energi berstandar **ASHRAE 90.1 & SNI 6389**, konsultan teknik PT Lentera Duta Persada mampu mengidentifikasi titik kebocoran energi dan merancang perbaikan sistem hidronik yang memberikan *Return on Investment (ROI)* di bawah 2 tahun.
 
 ---
 
@@ -113,7 +113,7 @@ Sistem tata udara cleanroom harus mengendalikan 5 parameter kunci:
 ---
 
 ### Peran Konsultan Teknik dalam Uji Kualifikasi (DQ, IQ, OQ, PQ)
-Sebagai konsultan independen, PT LENTANG Duta Perkasa mendampingi dari tahap *Design Qualification (DQ)* hingga sertifikasi kualifikasi performa *Operational & Performance Qualification (OQ & PQ)* dengan alat uji Particle Counter, Smoke Pattern Testing, dan Anemometer terkalibrasi KAN.
+Sebagai konsultan independen, PT Lentera Duta Persada mendampingi dari tahap *Design Qualification (DQ)* hingga sertifikasi kualifikasi performa *Operational & Performance Qualification (OQ & PQ)* dengan alat uji Particle Counter, Smoke Pattern Testing, dan Anemometer terkalibrasi KAN.
     `
   },
   {
@@ -601,7 +601,7 @@ export default function BlogPage({ onReturnToSite, onOpenConsultation }) {
               <div className="blog-author-name-lg" itemProp="name">{selectedArticle.author.name}</div>
               <div className="blog-author-role-lg" itemProp="jobTitle">{selectedArticle.author.role}</div>
               <div className="blog-author-firm" itemProp="worksFor" itemScope itemType="https://schema.org/Organization">
-                <span itemProp="name">PT LENTANG Duta Perkasa</span> — Konsultan MEP & HVAC
+                <span itemProp="name">PT Lentera Duta Persada</span> — Konsultan MEP & HVAC
               </div>
             </div>
           </div>
@@ -737,7 +737,7 @@ export default function BlogPage({ onReturnToSite, onOpenConsultation }) {
                 Membutuhkan Analisis atau Audit Terkait Fasilitas Anda?
               </h4>
               <p className="blog-cta-desc">
-                Tim insinyur spesialis MEP & HVAC dari PT LENTANG Duta Perkasa siap memberikan pendampingan teknis independen, perhitungan beban detail, maupun review desain sistem fasilitas gedung Anda.
+                Tim insinyur spesialis MEP & HVAC dari PT Lentera Duta Persada siap memberikan pendampingan teknis independen, perhitungan beban detail, maupun review desain sistem fasilitas gedung Anda.
               </p>
               <div className="blog-cta-buttons">
                 <button 
@@ -874,7 +874,7 @@ export default function BlogPage({ onReturnToSite, onOpenConsultation }) {
           </h1>
 
           <p className="blog-hero-desc">
-            Wawasan profesional dari para direksi dan tim konsultan teknik PT LENTANG Duta Perkasa mengenai efisiensi energi, audit termal, simulasi CFD 3D, dan kepatuhan standar industri.
+            Wawasan profesional dari para direksi dan tim konsultan teknik PT Lentera Duta Persada mengenai efisiensi energi, audit termal, simulasi CFD 3D, dan kepatuhan standar industri.
           </p>
 
           {/* Search Box */}
@@ -1111,7 +1111,7 @@ export default function BlogPage({ onReturnToSite, onOpenConsultation }) {
               Punya Studi Kasus Gedung yang Ingin Dibedah?
             </h4>
             <p className="blog-dir-banner-desc">
-              Diskusikan perencanaan HVAC, review gambar CAD/BIM, dan audit efisiensi energi gedung Anda langsung bersama tim insinyur senior PT LENTANG Duta Perkasa.
+              Diskusikan perencanaan HVAC, review gambar CAD/BIM, dan audit efisiensi energi gedung Anda langsung bersama tim insinyur senior PT Lentera Duta Persada.
             </p>
           </div>
           <button 

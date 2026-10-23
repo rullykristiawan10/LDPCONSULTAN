@@ -503,7 +503,7 @@ export default function App() {
           <a href="#" className="brand-logo" aria-label="Beranda LDP Technical Consultant">
             <img 
               src="/images/ldp_logo.png" 
-              alt="PT Lentang Duta Perkasa - LDP Technical Consultant" 
+              alt="PT Lentera Duta Persada - LDP Technical Consultant" 
               className="brand-logo-img" 
             />
           </a>
@@ -690,7 +690,7 @@ export default function App() {
               <h2>LDP Technical Consultant <br /><span className="text-blue-600">Part of MW Group</span></h2>
 
               <p>
-                <strong>PT Lentang Duta Perkasa (LDP Technical Consultant)</strong> adalah entitas konsultan teknik profesional yang berfokus pada perancangan sistem MEP (Mechanical, Electrical & Plumbing) serta HVAC Engineering modern. Kami mendampingi pemilik gedung, kontraktor EPC, dan pengembang industri dari tahap konsep awal hingga pengujian commissioning.
+                <strong>PT Lentera Duta Persada (LDP Technical Consultant)</strong> adalah entitas konsultan teknik profesional yang berfokus pada perancangan sistem MEP (Mechanical, Electrical & Plumbing) serta HVAC Engineering modern. Kami mendampingi pemilik gedung, kontraktor EPC, dan pengembang industri dari tahap konsep awal hingga pengujian commissioning.
               </p>
 
               <p>
@@ -1253,7 +1253,7 @@ export default function App() {
                 </a>
 
                 <a 
-                  href={`mailto:${siteSettings.email || 'consultant@ldpgroup.co.id'}?subject=Permintaan%20Konsultasi%20Teknik%20MEP%20HVAC%20-%20PT%20Lentang%20Duta%20Perkasa`}
+                  href={`mailto:${siteSettings.email || 'consultant@ldpgroup.co.id'}?subject=Permintaan%20Konsultasi%20Teknik%20MEP%20HVAC%20-%20PT%20Lentera%20Duta%20Persada`}
                   className="btn-email-outline"
                 >
                   <Mail className="w-4 h-4" />
@@ -1338,7 +1338,7 @@ export default function App() {
               <a href="#" className="brand-logo footer-logo mb-4" aria-label="Beranda LDP Technical Consultant">
                 <img 
                   src="/images/ldp_logo_white.png" 
-                  alt="PT Lentang Duta Perkasa - LDP Technical Consultant" 
+                  alt="PT Lentera Duta Persada - LDP Technical Consultant" 
                   className="brand-logo-img footer-logo-img" 
                 />
               </a>
@@ -1409,7 +1409,7 @@ export default function App() {
 
           <div className="footer-bottom">
             <div className="text-slate-400">
-              © 2026 <strong>PT Lentang Duta Perkasa</strong> (LDP Technical Consultant). All Rights Reserved.
+              © 2026 <strong>PT Lentera Duta Persada</strong> (LDP Technical Consultant). All Rights Reserved.
             </div>
             <div className="flex items-center gap-4 text-slate-400 text-xs">
               <a href="#" className="hover:text-white transition-colors">Kebijakan Privasi</a>
@@ -1511,7 +1511,7 @@ export default function App() {
               <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.82rem', color: '#64748B' }}>
                 <Mail className="w-4 h-4 text-sky-500" />
                 <span>Atau kirim dokumen via email:</span>
-                <a href={`mailto:${siteSettings.email || 'consultant@ldpgroup.co.id'}?subject=Permintaan%20Konsultasi%20Teknik%20MEP%20HVAC%20-%20PT%20Lentang%20Duta%20Perkasa`} className="text-sky-600 font-bold hover:underline">
+                <a href={`mailto:${siteSettings.email || 'consultant@ldpgroup.co.id'}?subject=Permintaan%20Konsultasi%20Teknik%20MEP%20HVAC%20-%20PT%20Lentera%20Duta%20Persada`} className="text-sky-600 font-bold hover:underline">
                   {siteSettings.email || 'consultant@ldpgroup.co.id'}
                 </a>
               </div>
@@ -1592,7 +1592,7 @@ export default function App() {
                 <ShieldCheck className="w-8 h-8" />
               </div>
               <h3 className="text-xl font-extrabold text-slate-900">Dokumen Legalitas & Verifikasi NIB</h3>
-              <p className="text-xs text-slate-500 mt-1">PT Lentang Duta Perkasa - LDP Technical Consultant</p>
+              <p className="text-xs text-slate-500 mt-1">PT Lentera Duta Persada - LDP Technical Consultant</p>
             </div>
 
             <div className="border border-slate-200 rounded-xl p-5 bg-slate-50 mb-6 space-y-3 text-xs">

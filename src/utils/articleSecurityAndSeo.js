@@ -1,14 +1,14 @@
 /**
- * PT LENTANG DUTA PERKASA - Article Security & SEO Engine
+ * PT LENTERA DUTA PERSADA - Article Security & SEO Engine
  * Module for content sanitization, XSS prevention, SEO metadata injection,
  * Schema.org JSON-LD structured data, and SEO health auditing.
  */
 
 // Default site metadata for restoring on page unmount
 export const DEFAULT_SITE_METADATA = {
-  title: "LDP Technical Consultant - PT LENTANG Duta Perkasa",
-  description: "LDP Technical Consultant (PT LENTANG Duta Perkasa) adalah konsultan teknik profesional terpercaya untuk perencanaan, audit, dan supervisi sistem MEP & HVAC Engineering di Indonesia.",
-  keywords: "LDP Technical Consultant, PT LENTANG Duta Perkasa, MEP Engineering, HVAC System, MW Group, Konsultan Teknik, Audit HVAC, Feasibility Study, BoQ",
+  title: "LDP Technical Consultant - PT Lentera Duta Persada",
+  description: "LDP Technical Consultant (PT Lentera Duta Persada) adalah konsultan teknik profesional terpercaya untuk perencanaan, audit, dan supervisi sistem MEP & HVAC Engineering di Indonesia.",
+  keywords: "LDP Technical Consultant, PT Lentera Duta Persada, MEP Engineering, HVAC System, MW Group, Konsultan Teknik, Audit HVAC, Feasibility Study, BoQ",
   siteUrl: "https://ldpconsultant.co.id",
   logoUrl: "/images/logo.svg"
 };
@@ -380,9 +380,9 @@ export const analyzeArticleSeo = (article) => {
     stats,
     securityStatus,
     serpPreview: {
-      title: title || 'Judul Publikasi Rekayasa MEP HVAC | PT LENTANG Duta Perkasa',
+      title: title || 'Judul Publikasi Rekayasa MEP HVAC | PT Lentera Duta Persada',
       url: `https://ldpconsultant.co.id/#blog/${slug || 'audit-energi-chiller'}`,
-      description: summary || 'Baca ulasan profesional dan panduan standar rekayasa teknik dari konsultan ahli PT LENTANG Duta Perkasa.'
+      description: summary || 'Baca ulasan profesional dan panduan standar rekayasa teknik dari konsultan ahli PT Lentera Duta Persada.'
     }
   };
 };
@@ -410,17 +410,17 @@ export const applyArticleSeo = (article) => {
     return;
   }
 
-  const siteTitle = `${article.title} | PT LENTANG Duta Perkasa`;
+  const siteTitle = `${article.title} | PT Lentera Duta Persada`;
   document.title = siteTitle;
 
   // Primary Meta Tags
   getOrCreateMetaTag('name', 'description').setAttribute('content', article.summary || DEFAULT_SITE_METADATA.description);
   getOrCreateMetaTag('name', 'keywords').setAttribute('content', (article.tags && article.tags.length > 0) ? article.tags.join(', ') : DEFAULT_SITE_METADATA.keywords);
-  getOrCreateMetaTag('name', 'author').setAttribute('content', article.author?.name || 'PT LENTANG Duta Perkasa');
+  getOrCreateMetaTag('name', 'author').setAttribute('content', article.author?.name || 'PT Lentera Duta Persada');
 
   // Open Graph / Facebook / LinkedIn
   getOrCreateMetaTag('property', 'og:type').setAttribute('content', 'article');
-  getOrCreateMetaTag('property', 'og:site_name').setAttribute('content', 'PT LENTANG Duta Perkasa');
+  getOrCreateMetaTag('property', 'og:site_name').setAttribute('content', 'PT Lentera Duta Persada');
   getOrCreateMetaTag('property', 'og:title').setAttribute('content', article.title);
   getOrCreateMetaTag('property', 'og:description').setAttribute('content', article.summary);
   getOrCreateMetaTag('property', 'og:url').setAttribute('content', window.location.href);
@@ -475,12 +475,12 @@ export const applyArticleSeo = (article) => {
           "jobTitle": article.author?.role || "Engineering Consultant",
           "worksFor": {
             "@type": "Organization",
-            "name": "PT LENTANG Duta Perkasa"
+            "name": "PT Lentera Duta Persada"
           }
         },
         "publisher": {
           "@type": "Organization",
-          "name": "PT LENTANG Duta Perkasa",
+          "name": "PT Lentera Duta Persada",
           "url": window.location.origin,
           "logo": {
             "@type": "ImageObject",
@@ -538,10 +538,10 @@ export const resetSeoToDefault = () => {
 
   getOrCreateMetaTag('name', 'description').setAttribute('content', DEFAULT_SITE_METADATA.description);
   getOrCreateMetaTag('name', 'keywords').setAttribute('content', DEFAULT_SITE_METADATA.keywords);
-  getOrCreateMetaTag('name', 'author').setAttribute('content', 'PT LENTANG Duta Perkasa');
+  getOrCreateMetaTag('name', 'author').setAttribute('content', 'PT Lentera Duta Persada');
 
   getOrCreateMetaTag('property', 'og:type').setAttribute('content', 'website');
-  getOrCreateMetaTag('property', 'og:site_name').setAttribute('content', 'PT LENTANG Duta Perkasa');
+  getOrCreateMetaTag('property', 'og:site_name').setAttribute('content', 'PT Lentera Duta Persada');
   getOrCreateMetaTag('property', 'og:title').setAttribute('content', DEFAULT_SITE_METADATA.title);
   getOrCreateMetaTag('property', 'og:description').setAttribute('content', DEFAULT_SITE_METADATA.description);
   getOrCreateMetaTag('property', 'og:url').setAttribute('content', window.location.origin);
